@@ -14,6 +14,7 @@ use crate::models::collection::Collection;
 use crate::models::environment::Environment;
 use crate::models::export::ExportFormat;
 use crate::tui::app_states::AppState;
+use crate::tui::workspace::{Pane, RequestTab};
 use crate::tui::ui::param_tabs::param_tabs::RequestParamsTabs;
 use crate::tui::ui::result_tabs::RequestResultTabs;
 use crate::tui::ui::views::RequestView;
@@ -49,12 +50,18 @@ pub struct App<'a> {
     /* Help */
 
     pub help_popup: HelpPopup,
+    pub search: crate::tui::search::SearchState,
 
     /* Environments */
     
     pub environments: Vec<Arc<RwLock<Environment>>>,
     pub selected_environment: usize,
     pub env_editor_table: StatefulCustomTable<'a>,
+    pub env_editor_index: usize,
+    pub env_editor_list_focused: bool,
+    pub env_editor_list_state: ratatui::widgets::ListState,
+    pub env_name_input: TextInput,
+    pub env_delete_confirmed: bool,
 
     /* Cookies */
     
@@ -69,6 +76,14 @@ pub struct App<'a> {
     
     pub collections: Vec<Collection>,
     pub collections_tree: StatefulTree<'a>,
+
+    pub pane: Pane,
+    pub request_tabs: Vec<RequestTab>,
+    pub active_request_tab: Option<usize>,
+    pub pending_g: Option<std::time::Instant>,
+    pub pending_window: bool,
+    pub editor_command: Option<String>,
+    pub editor_notice: Option<String>,
 
     pub request_view: RequestView,
     pub request_param_tab: RequestParamsTabs,
@@ -131,7 +146,7 @@ pub struct App<'a> {
 
     /* Response */
     
-    pub received_response: Arc<Mutex<bool>>,
+    pub received_response: crate::models::response_updates::ResponseUpdates,
     
     pub result_throbber_state: ThrobberState,
     pub result_vertical_scrollbar: StatefulScrollbar,
@@ -169,16 +184,21 @@ impl App<'_> {
             /* Help */
 
             help_popup: HelpPopup::default(),
+            search: crate::tui::search::SearchState::default(),
 
             /* Environments */
 
             environments: vec![],
             selected_environment: 0,
+            env_editor_index: 0,
+            env_editor_list_focused: false,
+            env_editor_list_state: ratatui::widgets::ListState::default(),
+            env_name_input: TextInput::new(None),
+            env_delete_confirmed: false,
             env_editor_table: StatefulCustomTable::new(
                 vec![
                     Line::default(),
-                    Line::from("No environment variable").fg(THEME.read().ui.font_color),
-                    Line::from("(Add one with n)").fg(THEME.read().ui.secondary_foreground_color)
+                    Line::from("No environment variable").fg(THEME.read().ui.font_color)
                 ],
                 "Key",
                 "Value"
@@ -198,6 +218,13 @@ impl App<'_> {
             collections: vec![],
             collections_tree: StatefulTree::default(),
 
+            pane: Pane::Collections,
+            request_tabs: vec![],
+            active_request_tab: None,
+            pending_g: None,
+            pending_window: false,
+            editor_command: None,
+            editor_notice: None,
             request_view: RequestView::Normal,
 
             request_param_tab: RequestParamsTabs::QueryParams,
@@ -225,8 +252,7 @@ impl App<'_> {
             query_params_table: StatefulCustomTable::new(
                 vec![
                     Line::default(),
-                    Line::from("No params").fg(THEME.read().ui.font_color),
-                    Line::from("(Add one with n or via the URL)").fg(THEME.read().ui.secondary_foreground_color)
+                    Line::from("No params").fg(THEME.read().ui.font_color)
                 ],
                 "Param",
                 "Value"
@@ -256,8 +282,7 @@ impl App<'_> {
             headers_table: StatefulCustomTable::new(
                 vec![
                     Line::default(),
-                    Line::from("Default headers").fg(THEME.read().ui.font_color),
-                    Line::from("(Add one with n)").fg(THEME.read().ui.secondary_foreground_color)
+                    Line::from("Default headers").fg(THEME.read().ui.font_color)
                 ],
                 "Header",
                 "Value"
@@ -269,8 +294,7 @@ impl App<'_> {
             body_form_table: StatefulCustomTable::new(
                 vec![
                     Line::default(),
-                    Line::from("No form data").fg(THEME.read().ui.font_color),
-                    Line::from("(Add one with n)").fg(THEME.read().ui.secondary_foreground_color)
+                    Line::from("No form data").fg(THEME.read().ui.font_color)
                 ],
                 "Key",
                 "Value"
@@ -288,7 +312,7 @@ impl App<'_> {
             /* Response */
             
             result_throbber_state: ThrobberState::default(),
-            received_response: Arc::new(Mutex::new(false)),
+            received_response: Arc::new(Mutex::new(Vec::new())),
             result_vertical_scrollbar: StatefulScrollbar::default(),
             result_horizontal_scrollbar: StatefulScrollbar::default(),
 
@@ -329,6 +353,8 @@ impl App<'_> {
         let original_hook = std::panic::take_hook();
 
         std::panic::set_hook(Box::new(move |panic| {
+            use ratatui::crossterm::{ExecutableCommand, event::DisableBracketedPaste};
+            let _ = std::io::stdout().execute(DisableBracketedPaste);
             disable_raw_mode().unwrap();
             original_hook(panic);
         }));

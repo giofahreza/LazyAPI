@@ -88,11 +88,11 @@ impl<'a> App<'a> {
                 self.add_environment_from_file(&path);
                 continue;
             }
-            else if file_name == "atac.toml" {
+            else if file_name == "lazyapi.toml" {
                 self.parse_config_file(&path);
                 continue;
             }
-            else if file_name == "atac.log" {
+            else if file_name == "lazyapi.log" {
                 trace!("Log file is not parsable");
                 continue;
             }
@@ -129,10 +129,11 @@ impl<'a> App<'a> {
         }
 
         self.collections.sort_by(|a,b| a.last_position.unwrap_or(usize::MAX).cmp(&b.last_position.unwrap_or(usize::MAX)));
+        self.environments.sort_by(|a, b| a.read().name.cmp(&b.read().name));
     }
 
     fn create_log_file(&mut self) -> File {
-        let path = ARGS.directory.as_ref().unwrap().join("atac.log");
+        let path = ARGS.directory.as_ref().unwrap().join("lazyapi.log");
 
         let log_file = match OpenOptions::new().write(true).create(true).truncate(true).open(path) {
             Ok(log_file) => log_file,

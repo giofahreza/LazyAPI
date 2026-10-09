@@ -2,14 +2,10 @@ use crokey::{key, KeyCombination};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
-use ratatui::prelude::Span;
-use ratatui::style::{Color, Stylize};
-use ratatui::text::Line;
 use strum::Display;
 
 use crate::app::app::App;
 use crate::app::files::key_bindings::{CustomTextArea, TextAreaMode, KEY_BINDINGS};
-use crate::app::files::theme::THEME;
 use crate::models::protocol::protocol::Protocol;
 use crate::tui::app_states::AppState::*;
 use crate::tui::event_key_bindings::EventKeyBinding;
@@ -31,6 +27,13 @@ pub enum AppState {
 
     #[strum(to_string = "Editing env variable")]
     EditingEnvVariable,
+
+    #[strum(to_string = "Creating environment")]
+    CreatingEnvironment,
+    #[strum(to_string = "Renaming environment")]
+    RenamingEnvironment,
+    #[strum(to_string = "Deleting environment")]
+    DeletingEnvironment,
 
     /* Cookies */
 
@@ -144,90 +147,6 @@ pub enum AppState {
     DisplayingRequestExport
 }
 
-pub fn next_app_state(app_state: &AppState) -> AppState {
-    match app_state {
-        Normal => DisplayingEnvEditor,
-        DisplayingEnvEditor => EditingEnvVariable,
-        EditingEnvVariable => DisplayingCookies,
-        DisplayingCookies => EditingCookies,
-        EditingCookies => DisplayingLogs,
-        DisplayingLogs => ChoosingElementToCreate,
-        ChoosingElementToCreate => CreatingNewCollection,
-        CreatingNewCollection => CreatingNewRequest,
-        CreatingNewRequest => DeletingCollection,
-        DeletingCollection => DeletingRequest,
-        DeletingRequest => RenamingCollection,
-        RenamingCollection => RenamingRequest,
-        RenamingRequest => SelectedRequest,
-        SelectedRequest => EditingRequestUrl,
-        EditingRequestUrl => EditingRequestParam,
-        EditingRequestParam => EditingRequestAuthBasicUsername,
-        EditingRequestAuthBasicUsername => EditingRequestAuthBasicPassword,
-        EditingRequestAuthBasicPassword => EditingRequestAuthBearerToken,
-        EditingRequestAuthBearerToken => EditingRequestAuthJwtSecret,
-        EditingRequestAuthJwtSecret => EditingRequestAuthJwtPayload,
-        EditingRequestAuthJwtPayload => EditingRequestAuthDigestUsername,
-        EditingRequestAuthDigestUsername => EditingRequestAuthDigestPassword,
-        EditingRequestAuthDigestPassword => EditingRequestAuthDigestDomains,
-        EditingRequestAuthDigestDomains => EditingRequestAuthDigestRealm,
-        EditingRequestAuthDigestRealm => EditingRequestAuthDigestNonce,
-        EditingRequestAuthDigestNonce => EditingRequestAuthDigestOpaque,
-        EditingRequestAuthDigestOpaque => EditingRequestHeader,
-        EditingRequestHeader => EditingRequestBodyTable,
-        EditingRequestBodyTable => EditingRequestBodyFile,
-        EditingRequestBodyFile => EditingRequestBodyString,
-        EditingRequestBodyString => EditingRequestMessage,
-        EditingRequestMessage => EditingPreRequestScript,
-        EditingPreRequestScript => EditingPostRequestScript,
-        EditingPostRequestScript => EditingRequestSettings,
-        EditingRequestSettings => ChoosingRequestExportFormat,
-        ChoosingRequestExportFormat => DisplayingRequestExport,
-        DisplayingRequestExport => Normal
-    }
-}
-
-pub fn previous_app_state(app_state: &AppState) -> AppState {
-    match app_state {
-        Normal => EditingRequestSettings,
-        DisplayingEnvEditor => Normal,
-        EditingEnvVariable => DisplayingEnvEditor,
-        DisplayingCookies => EditingEnvVariable,
-        EditingCookies => DisplayingCookies,
-        DisplayingLogs => EditingCookies,
-        ChoosingElementToCreate => DisplayingLogs,
-        CreatingNewCollection => ChoosingElementToCreate,
-        CreatingNewRequest => CreatingNewCollection,
-        DeletingCollection => CreatingNewRequest,
-        DeletingRequest => DeletingCollection,
-        RenamingCollection => DeletingRequest,
-        RenamingRequest => RenamingCollection,
-        SelectedRequest => RenamingRequest,
-        EditingRequestUrl => SelectedRequest,
-        EditingRequestParam => EditingRequestUrl,
-        EditingRequestAuthBasicUsername => EditingRequestParam,
-        EditingRequestAuthBasicPassword => EditingRequestAuthBasicUsername,
-        EditingRequestAuthBearerToken => EditingRequestAuthBasicPassword,
-        EditingRequestAuthJwtSecret => EditingRequestAuthBearerToken,
-        EditingRequestAuthJwtPayload => EditingRequestAuthJwtSecret,
-        EditingRequestAuthDigestUsername => EditingRequestAuthJwtPayload,
-        EditingRequestAuthDigestPassword => EditingRequestAuthDigestUsername,
-        EditingRequestAuthDigestDomains => EditingRequestAuthDigestPassword,
-        EditingRequestAuthDigestRealm => EditingRequestAuthDigestDomains,
-        EditingRequestAuthDigestNonce => EditingRequestAuthDigestRealm,
-        EditingRequestAuthDigestOpaque => EditingRequestAuthDigestNonce,
-        EditingRequestHeader => EditingRequestAuthDigestOpaque,
-        EditingRequestBodyTable => EditingRequestHeader,
-        EditingRequestBodyFile => EditingRequestBodyTable,
-        EditingRequestBodyString => EditingRequestBodyFile,
-        EditingRequestMessage => EditingRequestBodyString,
-        EditingPreRequestScript => EditingRequestMessage,
-        EditingPostRequestScript => EditingPreRequestScript,
-        EditingRequestSettings => EditingPostRequestScript,
-        ChoosingRequestExportFormat => EditingRequestSettings,
-        DisplayingRequestExport => ChoosingRequestExportFormat
-    }
-}
-
 impl AppState {
     pub fn get_available_events(&self, request_view: RequestView, request_param_tab: RequestParamsTabs, protocol: Option<Protocol>, is_there_any_env: bool) -> Vec<AppEvent> {
         let key_bindings = KEY_BINDINGS.read();
@@ -255,10 +174,10 @@ impl AppState {
                     MoveElementDown(EventKeyBinding::new(vec![key_bindings.main_menu.move_request_down], "Move request down", None)),
                 ];
 
+                base_events.push(DisplayEnvEditor(EventKeyBinding::new(vec![key_bindings.main_menu.display_env_editor], "Environment manager", None)));
                 if is_there_any_env {
                     let env_events = vec![
                         NextEnvironment(EventKeyBinding::new(vec![key_bindings.main_menu.next_environment], "Next environment", None)),
-                        DisplayEnvEditor(EventKeyBinding::new(vec![key_bindings.main_menu.display_env_editor], "Environment editor", None)),
                     ];
                     
                     base_events.extend(env_events);
@@ -273,6 +192,8 @@ impl AppState {
                 
                 base_events
             },
+            CreatingEnvironment | RenamingEnvironment => generate_text_input_documentation(key_bindings.generic.text_input.mode, true, false),
+            DeletingEnvironment => vec![],
             DisplayingEnvEditor => vec![
                 GoBackToLastState(EventKeyBinding::new(vec![key_bindings.generic.navigation.go_back], "Quit", Some("Quit"))),
                 EditEnvVariable(EventKeyBinding::new(vec![key_bindings.generic.list_and_table_actions.edit_element], "Edit env variable", None)),
@@ -363,18 +284,18 @@ impl AppState {
             RenamingCollection => [
                 vec![
                     RenameCollection(EventKeyBinding::new(vec![key_bindings.generic.text_input.save_and_quit_single_line], "Confirm", Some("Confirm"))),
-                    CancelRenameCollection(EventKeyBinding::new(vec![key_bindings.generic.text_input.quit_without_saving], "Cancel", Some("Cancel"))),
+                    CancelRenameCollection(EventKeyBinding::new(vec![key!(esc), key_bindings.generic.text_input.quit_without_saving], "Cancel", Some("Cancel"))),
                     KeyEventRenameCollection(EventKeyBinding::new(vec![], "Any input", None)),
                 ],
-                generate_text_input_documentation(key_bindings.generic.text_input.mode, true, false)
+                generate_text_input_documentation(key_bindings.generic.text_input.mode, true, true)
             ].concat(),
             RenamingRequest => [
                 vec![
                     RenameRequest(EventKeyBinding::new(vec![key_bindings.generic.text_input.save_and_quit_single_line], "Confirm", Some("Confirm"))),
-                    CancelRenameRequest(EventKeyBinding::new(vec![key_bindings.generic.text_input.quit_without_saving], "Cancel", Some("Cancel"))),
+                    CancelRenameRequest(EventKeyBinding::new(vec![key!(esc), key_bindings.generic.text_input.quit_without_saving], "Cancel", Some("Cancel"))),
                     KeyEventRenameRequest(EventKeyBinding::new(vec![], "Any input", None)),
                 ],
-                generate_text_input_documentation(key_bindings.generic.text_input.mode, true, false)
+                generate_text_input_documentation(key_bindings.generic.text_input.mode, true, true)
             ].concat(),
             SelectedRequest => {
                 // Depending on the current request view, some keys may need to be deactivated
@@ -399,10 +320,10 @@ impl AppState {
                     SendRequest(EventKeyBinding::new(vec![key_bindings.request_selected.send_request, key_bindings.request_selected.alt_send_request], "Send/cancel request", Some("Send/Cancel"))),
                 ];
                 
+                base_events.push(DisplayEnvEditor(EventKeyBinding::new(vec![key_bindings.main_menu.display_env_editor], "Environment manager", None)));
                 if is_there_any_env {
                     let env_events = vec![
                         NextEnvironment(EventKeyBinding::new(vec![key_bindings.main_menu.next_environment], "Next environment", None)),
-                        DisplayEnvEditor(EventKeyBinding::new(vec![key_bindings.main_menu.display_env_editor], "Environment editor", None)),
                     ];
                     
                     base_events.extend(env_events);
@@ -835,27 +756,6 @@ fn generate_text_input_documentation(text_input_mode: TextAreaMode, single_line:
     initial
 }
 
-pub fn event_available_keys_to_spans(events: &Vec<AppEvent>, fg_color: Color, bg_color: Color, short_only: bool) -> Vec<Vec<Span<'_>>> {
-    let mut spans: Vec<Vec<Span>> = vec![];
-
-    for event in events.iter() {
-        let is_documentation = match event {
-            Documentation(_) => true,
-            _ => false
-        };
-
-        let event_key_bindings = event.get_event_key_bindings();
-
-        if let Some(key_spans) = event_key_bindings.to_spans(fg_color, bg_color, short_only, is_documentation) {
-            spans.push(key_spans);
-        }
-    }
-
-    spans.last_mut().unwrap().pop();
-
-    return spans;
-}
-
 lazy_static! {
     pub static ref AVAILABLE_EVENTS: RwLock<Vec<AppEvent>> = RwLock::new(vec![]);
     pub static ref EMPTY_KEY: KeyCombination = KeyCombination::new(KeyCode::Null, KeyModifiers::NONE);
@@ -863,6 +763,7 @@ lazy_static! {
 
 impl App<'_> {
     pub fn update_current_available_events(&mut self) {
+        self.sync_request_tabs();
         let is_there_any_env = match self.get_selected_env_as_local() {
             None => false,
             Some(_) => true
@@ -877,99 +778,21 @@ impl App<'_> {
             None => None
         };
         
-        *AVAILABLE_EVENTS.write() = self.state.get_available_events(self.request_view, self.request_param_tab, protocol, is_there_any_env);
-    }
-
-    pub fn get_state_line(&self) -> Line<'_> {
-        match self.state {
-            Normal |
-            ChoosingElementToCreate |
-            CreatingNewCollection | CreatingNewRequest |
-            DisplayingCookies | EditingCookies |
-            DisplayingLogs => Line::from(self.state.to_string()).fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color),
-
-            DeletingCollection | RenamingCollection => {
-                let collection_index = self.collections_tree.state.selected()[0];
-                let collection_name = &self.collections[collection_index].name;
-
-                Line::from(vec![
-                    Span::raw("Collection > ").fg(THEME.read().ui.secondary_foreground_color),
-                    Span::raw(format!("{} > ", collection_name)).fg(THEME.read().ui.secondary_foreground_color),
-                    Span::raw(self.state.to_string()).fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color)
-                ])
-            },
-
-            DeletingRequest | RenamingRequest => {
-                let selected_request_index = &self.collections_tree.state.selected();
-                let selected_request = &self.collections[selected_request_index[0]].requests[selected_request_index[1]].read();
-
-                Line::from(vec![
-                    Span::raw("Request > ").fg(THEME.read().ui.secondary_foreground_color),
-                    Span::raw(format!("{} > ", selected_request.name)).fg(THEME.read().ui.secondary_foreground_color),
-                    Span::raw(self.state.to_string()).fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color)
-                ])
-            },
-
-            DisplayingEnvEditor | EditingEnvVariable => {
-                let local_env = self.get_selected_env_as_local().unwrap();
-                let env = local_env.read();
-
-                Line::from(vec![
-                    Span::raw("Environment editor > ").fg(THEME.read().ui.secondary_foreground_color),
-                    Span::raw(env.name.clone()).fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color)
-                ])
-            },
-
-            SelectedRequest |
-            EditingRequestUrl |
-            EditingRequestParam |
-            EditingRequestAuthBasicUsername | EditingRequestAuthBasicPassword |
-            EditingRequestAuthBearerToken |
-            EditingRequestAuthJwtSecret | EditingRequestAuthJwtPayload |
-            EditingRequestAuthDigestUsername | EditingRequestAuthDigestPassword | EditingRequestAuthDigestDomains | EditingRequestAuthDigestRealm | EditingRequestAuthDigestNonce | EditingRequestAuthDigestOpaque |
-            EditingRequestHeader |
-            EditingRequestBodyTable | EditingRequestBodyFile | EditingRequestBodyString |
-            EditingRequestMessage |
-            EditingPreRequestScript | EditingPostRequestScript |
-            EditingRequestSettings |
-            ChoosingRequestExportFormat | DisplayingRequestExport
-            => {
-                let local_selected_request = self.get_selected_request_as_local();
-                let selected_request = local_selected_request.read();
-
-                if self.state == SelectedRequest {
-                    Line::from(vec![
-                        Span::raw("Request > ").fg(THEME.read().ui.secondary_foreground_color),
-                        Span::raw(selected_request.name.clone()).fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color)
-                    ])
-                }
-                else {
-                    Line::from(vec![
-                        Span::raw("Request > ").fg(THEME.read().ui.secondary_foreground_color),
-                        Span::raw(format!("{} > ", selected_request.name)).fg(THEME.read().ui.secondary_foreground_color),
-                        Span::raw(self.state.to_string()).fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color)
-                    ])
-                }
-            }
+        use crate::tui::workspace::Pane;
+        // The request view controls layout; focus controls which actions receive keys.
+        let event_view = match self.pane {
+            Pane::Response => RequestView::OnlyResult,
+            _ => RequestView::OnlyParams,
+        };
+        let mut events = self.state.get_available_events(event_view, self.request_param_tab, protocol, is_there_any_env);
+        if self.state == SelectedRequest && self.pane == Pane::Url {
+            events.retain(|e| matches!(e, ExitApp(_) | GoBackToLastState(_) | Documentation(_) | EditUrl(_) | EditMethod(_) | EditSettings(_) | NextView(_) | SendRequest(_) | NextEnvironment(_) | DisplayEnvEditor(_) | DisplayCookies(_) | DisplayLogs(_) | ExportRequest(_)));
         }
+        if self.state == DisplayingEnvEditor && self.env_editor_list_focused { events.clear(); }
+        *AVAILABLE_EVENTS.write() = events;
     }
-    
+
     pub fn in_input(&self) -> bool {
-        match self.state {
-            EditingEnvVariable |
-            EditingCookies |
-            CreatingNewCollection |
-            CreatingNewRequest |
-            RenamingCollection |
-            RenamingRequest |
-            EditingRequestUrl |
-            EditingRequestParam |
-            EditingRequestAuthBasicUsername | EditingRequestAuthBasicPassword | EditingRequestAuthBearerToken | EditingRequestAuthJwtSecret | EditingRequestAuthJwtPayload |
-            EditingRequestHeader |
-            EditingRequestBodyTable | EditingRequestBodyFile | EditingRequestBodyString |
-            EditingPreRequestScript | EditingPostRequestScript |
-            EditingRequestSettings => true,
-            _ => false
-        }
+        self.active_input().is_some()
     }
 }

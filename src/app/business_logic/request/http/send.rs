@@ -20,7 +20,8 @@ pub async fn send_http_request(prepared_request: reqwest_middleware::RequestBuil
 
     local_request.write().is_pending = true;
 
-    let request = local_request.read();
+    // Snapshot settings/scripts; never hold the request lock across network I/O.
+    let request = local_request.read().clone();
 
     let cancellation_token = request.cancellation_token.clone();
     let timeout = tokio::time::sleep(Duration::from_millis(request.settings.timeout.as_u32() as u64));

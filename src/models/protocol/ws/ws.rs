@@ -12,7 +12,7 @@ pub struct WsRequest {
     #[serde(skip_serializing_if = "should_skip_requests_messages", default = "Vec::default")]
     pub messages: Vec<Message>,
 
-    #[serde(skip)]
+    #[serde(default)]
     pub message_type: MessageType,
 
     #[serde(skip)]

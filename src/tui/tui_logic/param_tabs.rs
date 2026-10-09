@@ -26,6 +26,7 @@ impl App<'_> {
             }
         };
 
+        drop(selected_request);
         self.tui_load_a_request_param_tab();
     }
 

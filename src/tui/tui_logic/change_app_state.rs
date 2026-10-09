@@ -24,25 +24,29 @@ impl App<'_> {
     pub fn normal_state(&mut self) {
         SHOULD_RECORD_LOGS.store(true, Ordering::SeqCst);
 
-        if self.was_last_state_selected_request && self.state != AppState::SelectedRequest {
+        if self.was_last_state_selected_request && self.state != AppState::SelectedRequest && self.collections_tree.selected.is_some() {
             self.state = AppState::SelectedRequest;
         }
         else {
             self.state = AppState::Normal;
+            self.pane = crate::tui::workspace::Pane::Collections;
         }
     }
 
     pub fn display_env_editor_state(&mut self) {
-        if self.get_selected_env_as_local().is_none() {
-            return;
+        if !matches!(self.state, AppState::DisplayingEnvEditor | AppState::EditingEnvVariable
+            | AppState::CreatingEnvironment | AppState::RenamingEnvironment | AppState::DeletingEnvironment) {
+            self.env_editor_index = self.selected_environment;
+            self.env_editor_list_focused = self.environments.is_empty();
+            self.env_editor_table.update_selection(None);
         }
-
+        self.editor_notice = None;
         self.tui_update_env_variable_table();
         self.set_app_state(AppState::DisplayingEnvEditor);
     }
 
     pub fn edit_env_variable_state(&mut self) {
-        let local_env = self.get_selected_env_as_local();
+        let local_env = self.get_env_as_local_from_index(self.env_editor_index);
 
         if let Some(local_env) = local_env {
             let env = local_env.read();
@@ -123,6 +127,8 @@ impl App<'_> {
     }
     
     pub fn create_new_collection_state(&mut self) {
+        self.new_collection_input.clear();
+        self.new_collection_input.reset_mode();
         self.set_app_state(AppState::CreatingNewCollection);
     }
 
@@ -145,6 +151,9 @@ impl App<'_> {
         };
         
         self.new_request_popup.selected_collection = popup_selected_collection_index;
+        self.new_request_popup.selection = 2;
+        self.new_request_popup.text_input.clear();
+        self.new_request_popup.text_input.reset_mode();
         self.new_request_popup.max_collection_selection = collections_length;
         self.set_app_state(AppState::CreatingNewRequest);
     }
@@ -165,8 +174,9 @@ impl App<'_> {
         let collection_name = &self.collections[selected_request_index[0]].name;
         self.rename_collection_input.clear();
         self.rename_collection_input.push_str(collection_name);
+        self.rename_collection_input.state.mode = edtui::EditorMode::Insert;
         self.rename_collection_input.state.execute(MoveToEndOfLine());
-        
+
         self.set_app_state(AppState::RenamingCollection);
     }
 
@@ -177,6 +187,7 @@ impl App<'_> {
             let selected_request = self.collections[selected_request_index[0]].requests[selected_request_index[1]].read();
             self.rename_request_input.clear();
             self.rename_request_input.push_str(&selected_request.name);
+            self.rename_request_input.state.mode = edtui::EditorMode::Insert;
             self.rename_request_input.state.execute(MoveToEndOfLine());
         }
 
@@ -190,6 +201,7 @@ impl App<'_> {
     }
 
     pub fn edit_request_url_state(&mut self) {
+        self.pane = crate::tui::workspace::Pane::Url;
         self.set_app_state(AppState::EditingRequestUrl);
         self.update_inputs();
     }
@@ -308,6 +320,7 @@ impl App<'_> {
 
     pub fn edit_request_message_state(&mut self) {
         self.set_app_state(AppState::EditingRequestMessage);
+        self.update_inputs();
     }
 
     pub fn edit_request_script_state(&mut self) {

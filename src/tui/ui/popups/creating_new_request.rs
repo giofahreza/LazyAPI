@@ -1,7 +1,7 @@
 use ratatui::layout::Direction::Vertical;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::prelude::{Color, Stylize};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::prelude::Stylize;
+use ratatui::widgets::{Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 use crate::app::app::App;
@@ -11,9 +11,9 @@ use crate::tui::utils::stateful::text_input::SingleLineTextInput;
 
 impl App<'_> {
     pub fn render_creating_new_request_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color)
+
             .bg(THEME.read().ui.main_background_color);
 
 
@@ -31,33 +31,21 @@ impl App<'_> {
 
 
         let selected_collection_name = self.collections[self.new_request_popup.selected_collection].name.clone();
-        let selection_collection_block_color = match self.new_request_popup.selection == 0 {
-            true => Color::Yellow,
-            false => THEME.read().ui.main_foreground_color
-        };
         let selected_collection_paragraph = Paragraph::new(selected_collection_name)
             .fg(THEME.read().ui.font_color)
             .block(
-                Block::new()
-                    .title("Collection ← →")
+                THEME.read().panel("Collection ← →", self.new_request_popup.selection == 0)
                     .borders(Borders::ALL)
-                    .fg(selection_collection_block_color)
             );
 
         let selected_protocol_name = self.new_request_popup.protocol.to_string();
-        let selected_protocol_block_color = match self.new_request_popup.selection == 1 {
-            true => Color::Yellow,
-            false => THEME.read().ui.main_foreground_color
-        };
         let selected_protocol_paragraph = Paragraph::new(selected_protocol_name)
             .fg(THEME.read().ui.font_color)
             .block(
-                Block::new()
-                    .title("Protocol ← →")
+                THEME.read().panel("Protocol ← →", self.new_request_popup.selection == 1)
                     .borders(Borders::ALL)
-                    .fg(selected_protocol_block_color)
             );
-        
+
         let highlight_and_display_cursor = self.new_request_popup.selection == 2;
 
         frame.render_widget(Clear, area);

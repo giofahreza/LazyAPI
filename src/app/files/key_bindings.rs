@@ -8,7 +8,6 @@ use crokey::{key, KeyCombination};
 use lazy_static::lazy_static;
 use nestify::nest;
 use parking_lot::RwLock;
-use ratatui::text::Span;
 use serde::Deserialize;
 
 use crate::app::app::App;
@@ -20,9 +19,44 @@ pub struct KeyBindingsConfig {
     pub keybindings: KeyBindings,
 }
 
+/// Workspace bindings are optional in older keybinding files.
+#[derive(Copy, Clone, Deserialize)]
+#[serde(default)]
+pub struct Workspace {
+    pub focus_left: KeyCombination,
+    pub focus_down: KeyCombination,
+    pub focus_up: KeyCombination,
+    pub focus_right: KeyCombination,
+    pub previous_request: KeyCombination,
+    pub next_request: KeyCombination,
+    pub close_request: KeyCombination,
+    pub previous_panel: KeyCombination,
+    pub page_up: KeyCombination,
+    pub page_down: KeyCombination,
+}
+
+impl Default for Workspace {
+    fn default() -> Self {
+        Self {
+            focus_left: key!(ctrl-h),
+            focus_down: key!(ctrl-j),
+            focus_up: key!(ctrl-k),
+            focus_right: key!(ctrl-l),
+            previous_request: "[".parse().unwrap(),
+            next_request: "]".parse().unwrap(),
+            close_request: key!(shift-X),
+            previous_panel: key!(shift-backtab),
+            page_up: key!(ctrl-u),
+            page_down: key!(ctrl-d),
+        }
+    }
+}
+
 nest! {
     #[derive(Copy, Clone, Deserialize)]
     pub struct KeyBindings {
+        #[serde(default)]
+        pub workspace: Workspace,
         pub main_menu: #[derive(Copy, Clone, Deserialize)] pub struct MainMenu {
             /// ctrl-c is implemented by default
             pub exit: KeyCombination,
@@ -157,37 +191,38 @@ pub struct CustomTextArea {
 impl Default for KeyBindings {
     fn default() -> Self {
         KeyBindings {
+            workspace: Workspace::default(),
             main_menu: MainMenu {
                 exit: key!(q),
 
-                expand_collection: key!(right),
-                unselect_request: key!(left),
+                expand_collection: key!(l),
+                unselect_request: key!(h),
 
-                move_request_up: key!(ctrl-up),
-                move_request_down: key!(ctrl-down),
+                move_request_up: key!(shift-K),
+                move_request_down: key!(shift-J),
 
                 next_environment: key!(e),
 
                 display_env_editor: key!(ctrl-e),
                 display_cookies: key!(c),
-                display_logs: key!(l),
+                display_logs: key!(shift-L),
             },
 
             generic: Generic {
-                display_help: key!(Ctrl-h),
+                display_help: "?".parse().unwrap(),
 
                 text_input: TextInput {
-                    quit_without_saving: key!(esc),
+                    quit_without_saving: key!(ctrl-c),
                     save_and_quit_single_line: key!(enter),
                     save_and_quit_area: key!(ctrl-s),
-                    mode: TextAreaMode::Default,
+                    mode: TextAreaMode::Vim,
                 },
 
                 navigation: Navigation {
-                    move_cursor_up: key!(up),
-                    move_cursor_down: key!(down),
-                    move_cursor_left: key!(left),
-                    move_cursor_right: key!(right),
+                    move_cursor_up: key!(k),
+                    move_cursor_down: key!(j),
+                    move_cursor_left: key!(h),
+                    move_cursor_right: key!(l),
 
                     alt_move_cursor_up: key!(Up),
                     alt_move_cursor_down: key!(Down),
@@ -198,12 +233,12 @@ impl Default for KeyBindings {
                     select: key!(enter),
                 },
                 list_and_table_actions: ListAndTableActions {
-                    create_element: key!(n),
+                    create_element: key!(a),
                     delete_element: key!(d),
-                    edit_element: key!(enter),
+                    edit_element: key!(i),
                     rename_element: key!(r),
                     toggle_element: key!(t),
-                    duplicate_element: key!(ctrl-d),
+                    duplicate_element: key!(shift-Y),
                 },
             },
 
@@ -226,13 +261,13 @@ impl Default for KeyBindings {
                 param_tabs: ParamTabs {
                     change_auth_method: key!(ctrl-a),
                     change_body_content_type: key!(ctrl-b),
-                    change_message_type: key!(ctrl-m),
+                    change_message_type: key!(ctrl-t),
                 },
                 result_tabs: ResultTabs {
-                    scroll_up: key!(ctrl-up),
-                    scroll_down: key!(ctrl-down),
-                    scroll_left: key!(ctrl-left),
-                    scroll_right: key!(ctrl-right),
+                    scroll_up: key!(k),
+                    scroll_down: key!(j),
+                    scroll_left: key!(h),
+                    scroll_right: key!(l),
 
                     yank_response_part: key!(y),
 
@@ -276,8 +311,8 @@ impl Default for CustomTextArea {
 
 impl App<'_> {
     pub fn parse_key_bindings_file(&mut self) {
-        let path = match env::var("ATAC_KEY_BINDINGS") {
-            // If the ATAC_KEY_BINDINGS environment variable exists
+        let path = match env::var("LAZYAPI_KEY_BINDINGS") {
+            // If the LAZYAPI_KEY_BINDINGS environment variable exists
             Ok(env_key_bindings) => expand_tilde(PathBuf::from(env_key_bindings)),
             Err(_) => {
                 warn!("No key bindings file found, using default");
@@ -303,14 +338,5 @@ impl App<'_> {
         *KEY_BINDINGS.write() = config.keybindings;
 
         trace!("Key bindings file parsed!");
-    }
-}
-
-pub fn unique_key_and_help(help: Span<'static>, key: Span<'static>) -> Vec<Span<'static>> {
-    if help.to_string() == key.to_string() {
-        return vec![help];
-    }
-    else {
-        return vec![help, Span::raw(" "), key]
     }
 }

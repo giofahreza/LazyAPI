@@ -5,3 +5,8 @@ pub(super) mod event_key_bindings;
 pub(super) mod events;
 pub mod utils;
 mod macros;
+
+pub mod workspace;
+mod modal;
+mod navigation;
+pub mod search;

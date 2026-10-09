@@ -23,9 +23,9 @@ impl App<'_> {
 
     pub fn tui_select_request_auth_input_text(&mut self) {
         let local_selected_request = self.get_selected_request_as_local();
-        let selected_request = local_selected_request.read();
+        let auth = local_selected_request.read().auth.clone();
 
-        match selected_request.auth {
+        match auth {
             NoAuth => {}
             BasicAuth(_) => match self.auth_text_input_selection.selected {
                 0 => self.edit_request_auth_username_state(),

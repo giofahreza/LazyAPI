@@ -24,7 +24,8 @@ impl StatefulScrollbar {
 
     pub fn set_max_scroll(&mut self, max_scroll: u16) {
         self.max_scroll = max_scroll;
-        self.state = self.state.content_length(max_scroll as usize);
+        self.scroll = self.scroll.min(max_scroll);
+        self.state = self.state.content_length(max_scroll as usize).position(self.scroll as usize);
     }
 
     #[allow(unused)]

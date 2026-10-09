@@ -7,5 +7,8 @@ use serde::{Deserialize, Serialize};
 pub struct Environment {
     pub name: String,
     pub values: IndexMap<String, String>,
-    pub path: PathBuf
+    pub path: PathBuf,
+    // In-flight scripts may still hold this environment after it is deleted.
+    #[serde(skip)]
+    pub deleted: bool,
 }

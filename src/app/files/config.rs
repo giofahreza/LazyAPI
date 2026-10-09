@@ -91,7 +91,7 @@ impl App<'_> {
     pub fn parse_config_file(&mut self, path_buf: &PathBuf) {
         let mut file_content = String::new();
 
-        trace!("Trying to open \"atac.toml\" config file");
+        trace!("Trying to open \"lazyapi.toml\" config file");
 
         let mut config_file = OpenOptions::new()
             .read(true)

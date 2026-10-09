@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Direction::{Horizontal, Vertical};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Borders, Clear, Paragraph};
 
 use crate::app::app::App;
 use crate::app::files::theme::THEME;
@@ -10,10 +10,10 @@ use crate::tui::utils::centered_rect::centered_rect;
 
 impl App<'_> {
     pub fn render_request_settings_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Request settings")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color)
+
             .bg(THEME.read().ui.main_background_color);
 
         let settings_number = self.request_settings_popup.settings.len() as u16;
@@ -59,7 +59,7 @@ impl App<'_> {
             let mut setting_value_paragraph = Paragraph::new(setting_value.to_string()).fg(THEME.read().ui.font_color).centered();
 
             if index == self.request_settings_popup.selection {
-                setting_value_paragraph = setting_value_paragraph.fg(THEME.read().others.selection_highlight_color)
+                setting_value_paragraph = setting_value_paragraph.style(THEME.read().active_cell())
             }
 
             frame.render_widget(setting_name_paragraph, settings_names_layout[index + 1]);

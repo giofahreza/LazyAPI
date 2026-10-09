@@ -5,6 +5,7 @@ use std::io::stdout;
 use std::process::exit;
 
 use ratatui::crossterm::ExecutableCommand;
+use ratatui::crossterm::event::DisableBracketedPaste;
 use ratatui::crossterm::style::Stylize;
 use ratatui::crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend;
@@ -47,14 +48,16 @@ async fn main() -> anyhow::Result<()> {
 async fn run_tui<'a>(app: &mut App<'a>) -> anyhow::Result<()> {
     let terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
-    app
+    let result = app
         .prepare_terminal()
         .chain_hook()
         .run(terminal)
-        .await?;
+        .await;
 
+    stdout().execute(DisableBracketedPaste)?;
     stdout().execute(LeaveAlternateScreen)?;
     disable_raw_mode()?;
+    result?;
     
     Ok(())
 }

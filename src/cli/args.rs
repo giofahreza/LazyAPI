@@ -21,13 +21,11 @@ use crate::panic_error;
 #[command(
     version,
     about,
-    long_about = r#"ATAC is Arguably a Terminal API Client.
-It is based on well-known clients such as Postman, Insomnia, or even Bruno, but inside your terminal without any specific graphical environment needed.
-The philosophy of ATAC is to be free, account-less, and offline for now and forever."#,
+    long_about = "LazyAPI is a terminal API client for HTTP and WebSocket requests.\nManage collections, environments, and scripts locally, without an account.",
     styles = Styles::styled()
 )]
 pub struct Args {
-    /// Main application directory, containing JSON/YAML collections files, the atac.toml config file and the atac.log file
+    /// Main application directory, containing JSON/YAML collections files, the lazyapi.toml config file and the lazyapi.log file
     #[arg(short, long, value_hint = clap::ValueHint::DirPath)]
     pub directory: Option<PathBuf>,
 
@@ -55,7 +53,7 @@ pub struct Args {
 }
 
 /*
-atac
+lazyapi
   - collection
       - list
       - info
@@ -115,7 +113,7 @@ pub enum Command {
     /// Create a completion file
     Completions(CompletionsCommand),
 
-    /// Generate ATAC man page
+    /// Generate LazyAPI man page
     Man(ManCommand),
 }
 
@@ -154,7 +152,7 @@ lazy_static! {
 }
 
 fn get_app_config_dir() -> Option<PathBuf> {
-    let project_directory = ProjectDirs::from("com", "Julien-cpsn", "ATAC");
+    let project_directory = ProjectDirs::from("com", "LazyAPI", "LazyAPI");
 
     let config_directory = match project_directory {
         Some(project_directory) => {
@@ -179,14 +177,14 @@ fn choose_app_directory(path_buf: Option<PathBuf>, config_directory: &Option<Pat
         Some(directory) => expand_tilde(directory),
         
         // If no directory was provided with the CLI
-        None => match env::var("ATAC_MAIN_DIR") {
-            // If the ATAC_MAIN_DIR environment variable exists
+        None => match env::var("LAZYAPI_MAIN_DIR") {
+            // If the LAZYAPI_MAIN_DIR environment variable exists
             Ok(env_directory) => expand_tilde(PathBuf::from(env_directory)),
             
-            // No ATAC_MAIN_DIR env variable
+            // No LAZYAPI_MAIN_DIR env variable
             Err(_) => match config_directory {
                 Some(config_directory) => config_directory.clone(),
-                None => panic_error("No directory provided, provide one either with `--directory <dir>` or via the environment variable `ATAC_MAIN_DIR`")
+                None => panic_error("No directory provided, provide one either with `--directory <dir>` or via the environment variable `LAZYAPI_MAIN_DIR`")
             }
         }
     }

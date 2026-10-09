@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 use nestify::nest;
 use parking_lot::RwLock;
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, BorderType, Borders};
 use tracing::{trace, warn};
 use serde::{Deserialize, Serialize};
 
@@ -13,9 +15,55 @@ use crate::app::app::App;
 use crate::app::files::utils::expand_tilde;
 use crate::panic_error;
 
+/// LazyDB's Deep Space palette, shared by panes, tabs, dialogs and editors.
+/// Optional in existing theme files so older custom themes still load.
+#[derive(Copy, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Palette {
+    pub background: Color,
+    pub surface: Color,
+    pub surface_raised: Color,
+    pub border: Color,
+    pub grid_header: Color,
+    pub grid_header_text: Color,
+    pub grid_border: Color,
+    pub text: Color,
+    pub muted: Color,
+    pub accent: Color,
+    pub action: Color,
+    pub selection: Color,
+    pub success: Color,
+    pub warning: Color,
+    pub error: Color,
+}
+
+impl Default for Palette {
+    fn default() -> Self {
+        Self {
+            background: Color::Rgb(7, 11, 18),
+            surface: Color::Rgb(12, 19, 30),
+            surface_raised: Color::Rgb(17, 28, 43),
+            border: Color::Rgb(43, 66, 86),
+            grid_header: Color::Rgb(15, 34, 44),
+            grid_header_text: Color::Rgb(184, 235, 229),
+            grid_border: Color::Rgb(58, 72, 84),
+            text: Color::Rgb(215, 226, 237),
+            muted: Color::Rgb(105, 126, 146),
+            accent: Color::Rgb(99, 230, 216),
+            action: Color::Rgb(101, 167, 255),
+            selection: Color::Rgb(26, 55, 70),
+            success: Color::Rgb(92, 200, 150),
+            warning: Color::Rgb(244, 184, 96),
+            error: Color::Rgb(255, 107, 122),
+        }
+    }
+}
+
 nest! {
     #[derive(Serialize, Deserialize)]
     pub struct Theme {
+        #[serde(default)]
+        pub palette: Palette,
         #[serde(alias = "UI")]
         pub ui:
             #[derive(Serialize, Deserialize)]
@@ -99,48 +147,71 @@ nest! {
 
 impl Default for Theme {
     fn default() -> Self {
+        let palette = Palette::default();
         Theme {
+            palette,
             ui: ThemeUI {
-                font_color: Color::White,
-                app_background: None,
+                font_color: palette.text,
+                app_background: Some(palette.background),
 
-                main_foreground_color: Color::White,
-                secondary_foreground_color: Color::DarkGray,
+                main_foreground_color: palette.border,
+                secondary_foreground_color: palette.muted,
 
-                main_background_color: Color::DarkGray,
-                secondary_background_color: Color::Rgb(50, 50, 50),
+                main_background_color: palette.surface,
+                secondary_background_color: palette.surface_raised,
             },
             others: ThemeOthers {
-                selection_highlight_color: Color::Yellow,
-                environment_variable_highlight_color: Color::Cyan,
+                selection_highlight_color: palette.accent,
+                environment_variable_highlight_color: palette.accent,
             },
             http: ThemeHttp {
                 methods: ThemeMethods {
-                    get: Color::Green,
-                    post: Color::Yellow,
-                    put: Color::LightBlue,
-                    patch: Color::LightCyan,
-                    delete: Color::LightRed,
-                    options: Color::Magenta,
-                    head: Color::Green,
-                    trace: Color::Yellow,
-                    connect: Color::LightBlue
+                    get: palette.success,
+                    post: palette.warning,
+                    put: palette.action,
+                    patch: palette.accent,
+                    delete: palette.error,
+                    options: palette.action,
+                    head: palette.success,
+                    trace: palette.warning,
+                    connect: palette.action
                 },
             },
             websocket: ThemeWebsocket {
                 connection_status: ThemeConnectionStatuses {
-                    connected: Color::Green,
-                    disconnected: Color::Red
+                    connected: palette.success,
+                    disconnected: palette.error
                 },
 
                 messages: ThemeMessages {
-                    server_foreground_color: Color::Blue,
-                    server_background_color: Color::DarkGray,
-                    you_background_color: Color::Blue,
-                    details_color: Color::DarkGray
+                    server_foreground_color: palette.text,
+                    server_background_color: palette.surface_raised,
+                    you_background_color: palette.selection,
+                    details_color: palette.muted
                 }
             }
         }
+    }
+}
+
+impl Theme {
+    pub fn base(&self) -> Style {
+        Style::new().fg(self.ui.font_color).bg(self.ui.app_background.unwrap_or(Color::Reset))
+    }
+
+    pub fn panel<'a>(&self, title: impl Into<Line<'a>>, focused: bool) -> Block<'a> {
+        Block::new().title(title).borders(Borders::ALL).border_type(BorderType::Rounded)
+            .style(Style::new().fg(self.ui.font_color).bg(self.ui.main_background_color))
+            .title_style(Style::new().fg(if focused { self.others.selection_highlight_color } else { self.ui.secondary_foreground_color }).bold())
+            .border_style(Style::new().fg(if focused { self.others.selection_highlight_color } else { self.ui.main_foreground_color }))
+    }
+
+    pub fn selected(&self) -> Style {
+        Style::new().fg(self.ui.font_color).bg(self.palette.selection).add_modifier(Modifier::BOLD)
+    }
+
+    pub fn active_cell(&self) -> Style {
+        Style::new().fg(self.palette.background).bg(self.others.selection_highlight_color).add_modifier(Modifier::BOLD)
     }
 }
 
@@ -150,8 +221,8 @@ lazy_static! {
 
 impl App<'_> {
     pub fn parse_theme_file(&mut self) {
-        let path = match env::var("ATAC_THEME") {
-            // If the ATAC_THEME environment variable exists
+        let path = match env::var("LAZYAPI_THEME") {
+            // If the LAZYAPI_THEME environment variable exists
             Ok(env_theme) => expand_tilde(PathBuf::from(env_theme)),
             Err(_) => {
                 warn!("No theme file found, using default");

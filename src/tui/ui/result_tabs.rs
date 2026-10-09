@@ -4,7 +4,7 @@ use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::prelude::{Alignment, Style};
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, Tabs, Wrap};
+use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, Wrap};
 use ratatui::Frame;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
@@ -66,7 +66,7 @@ impl App<'_> {
             ]
         };
 
-        let result_tabs: Vec<Span> = allowed_tabs
+        let result_tabs: Vec<String> = allowed_tabs
             .iter()
             .filter_map(|tab| {
                 let text = match tab {
@@ -98,7 +98,7 @@ impl App<'_> {
                 };
 
                 match text {
-                    Some(text) => Some(Span::raw(text).fg(THEME.read().ui.font_color)),
+                    Some(text) => Some(text),
                     None => None
                 }
             })
@@ -121,15 +121,7 @@ impl App<'_> {
             }
         };
 
-        let result_tabs = Tabs::new(result_tabs)
-            .highlight_style(THEME.read().others.selection_highlight_color)
-            .select(selected_result_tab_index)
-            .block(
-                Block::new().borders(Borders::BOTTOM)
-                    .fg(THEME.read().ui.main_foreground_color)
-            );
-
-        frame.render_widget(result_tabs, request_result_layout[0]);
+        crate::tui::ui::tabs::render_tabs(frame, request_result_layout[0], &result_tabs, selected_result_tab_index, false);
 
         // If the selected request is currently pending
         if request.is_pending {
@@ -167,7 +159,7 @@ impl App<'_> {
                     None => {},
                     Some(content) => match content {
                         ResponseContent::Body(body) => {
-                            let lines: Vec<Line>;
+                            let mut lines: Vec<Line>;
                             if !self.config.is_syntax_highlighting_disabled() && self.syntax_highlighting.highlighted_body.is_some() {
                                 lines = self.syntax_highlighting.highlighted_body.clone().unwrap();
                             }
@@ -175,6 +167,10 @@ impl App<'_> {
                                 lines = body.lines().map(|line| Line::raw(line)).collect();
                             }
 
+                            let total_rows = self.search.register_lines(self.response_search_scope(), &lines,
+                                request_result_layout[2].width, self.config.should_wrap_body());
+                            self.result_vertical_scrollbar.set_max_scroll(total_rows.saturating_sub(1).min(u16::MAX as usize) as u16);
+                            self.search.highlight_lines(self.response_search_scope(), &mut lines);
                             let mut body_paragraph = Paragraph::new(lines);
 
                             if self.config.should_wrap_body() {
@@ -295,6 +291,9 @@ impl App<'_> {
                         last_sender = Some(&message.sender);
                     }
 
+                    self.search.register_lines(self.response_search_scope(), &messages,
+                        request_result_layout[2].width.saturating_sub(2), false);
+                    self.search.highlight_lines(self.response_search_scope(), &mut messages);
                     let messages_paragraph = Paragraph::new(messages)
                         .scroll((
                             self.result_vertical_scrollbar.scroll,
@@ -304,7 +303,7 @@ impl App<'_> {
                     let inner_area = Rect {
                         x: request_result_layout[2].x,
                         y: request_result_layout[2].y,
-                        width: request_result_layout[2].width - 2,
+                        width: request_result_layout[2].width.saturating_sub(2),
                         height: request_result_layout[2].height,
                     };
 
@@ -316,7 +315,10 @@ impl App<'_> {
                         Some(cookies) => cookies
                     };
 
-                    let cookies_paragraph = Paragraph::new(result_cookies)
+                    let mut cookie_lines: Vec<_> = result_cookies.lines().map(Line::from).collect();
+                    self.search.register_lines(self.response_search_scope(), &cookie_lines, request_result_layout[2].width, false);
+                    self.search.highlight_lines(self.response_search_scope(), &mut cookie_lines);
+                    let cookies_paragraph = Paragraph::new(cookie_lines)
                         .fg(THEME.read().ui.font_color)
                         .scroll((
                             self.result_vertical_scrollbar.scroll,
@@ -326,7 +328,7 @@ impl App<'_> {
                     frame.render_widget(cookies_paragraph, request_result_layout[2]);
                 },
                 RequestResultTabs::Headers => {
-                    let result_headers: Vec<Line> = request.response.headers
+                    let mut result_headers: Vec<Line> = request.response.headers
                         .par_iter()
                         .map(
                             |(header, value)| 
@@ -338,6 +340,8 @@ impl App<'_> {
                         )
                         .collect();
 
+                    self.search.register_lines(self.response_search_scope(), &result_headers, request_result_layout[2].width, false);
+                    self.search.highlight_lines(self.response_search_scope(), &mut result_headers);
                     let headers_paragraph = Paragraph::new(result_headers)
                         .scroll((
                             self.result_vertical_scrollbar.scroll,
@@ -347,7 +351,11 @@ impl App<'_> {
                     frame.render_widget(headers_paragraph, request_result_layout[2]);
                 },
                 RequestResultTabs::Console => {
-                    let console_paragraph = Paragraph::new(self.syntax_highlighting.highlighted_console_output.clone())
+                    self.search.register_lines(self.response_search_scope(), &self.syntax_highlighting.highlighted_console_output,
+                        request_result_layout[2].width, false);
+                    let mut lines = self.syntax_highlighting.highlighted_console_output.clone();
+                    self.search.highlight_lines(self.response_search_scope(), &mut lines);
+                    let console_paragraph = Paragraph::new(lines)
                         .scroll((
                             self.result_vertical_scrollbar.scroll,
                             self.result_horizontal_scrollbar.scroll

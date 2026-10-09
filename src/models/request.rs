@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use ratatui::prelude::{Line, Modifier, Span};
-use ratatui::style::{Color, Stylize};
+use ratatui::style::{ Stylize};
 use tracing::trace;
 use tui_tree_widget::TreeItem;
 use rayon::prelude::*;
@@ -91,7 +91,7 @@ lazy_static! {
         },
         KeyValue {
             enabled: true,
-            data: (String::from("user-agent"), format!("ATAC/v{}", env!("CARGO_PKG_VERSION"))),
+            data: (String::from("user-agent"), format!("LazyAPI/v{}", env!("CARGO_PKG_VERSION"))),
         },
         KeyValue {
             enabled: true,
@@ -143,8 +143,7 @@ impl Request {
         let prefix = match &self.protocol {
             Protocol::HttpRequest(http_request) => Span::from(http_request.method.to_string())
                 .style(Modifier::BOLD)
-                .fg(Color::White)
-                .bg(http_request.method.get_color()),
+                .fg(http_request.method.get_color()),
             Protocol::WsRequest(ws_request) => {
                 let color = match ws_request.is_connected {
                     true => THEME.read().websocket.connection_status.connected,
@@ -153,8 +152,7 @@ impl Request {
 
                 Span::from("WS")
                     .style(Modifier::BOLD)
-                    .fg(Color::White)
-                    .bg(color)
+                    .fg(color)
             }
         };
 

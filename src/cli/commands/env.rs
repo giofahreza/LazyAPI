@@ -9,6 +9,14 @@ pub struct EnvCommand {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum EnvSubcommand {
+    /// List environment names
+    List,
+    /// Create an empty environment
+    New { env_name: String },
+    /// Rename an environment without changing its variables
+    Rename { env_name: String, new_name: String },
+    /// Delete an environment and its variables
+    Delete { env_name: String },
     /// Describe an environment
     Info {
         /// e.g. my_env (from the file .env.my_env)

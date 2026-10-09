@@ -119,13 +119,14 @@ impl App<'_> {
             TextAreaMode::Emacs | TextAreaMode::Default | TextAreaMode::Custom(_) => EditorMode::Insert,
         };
 
-        self.env_editor_table.selection_text_input.default_mode = EditorMode::Insert;
+        self.env_editor_table.selection_text_input.default_mode = default_mode;
         self.new_collection_input.default_mode = default_mode;
         self.new_request_popup.text_input.default_mode = default_mode;
-        self.rename_collection_input.default_mode = default_mode;
-        self.rename_request_input.default_mode = default_mode;
+        // Rename inputs always start in Insert mode; Esc cancels the dialog.
+        self.rename_collection_input.default_mode = EditorMode::Insert;
+        self.rename_request_input.default_mode = EditorMode::Insert;
         self.url_text_input.default_mode = default_mode;
-        self.query_params_table.selection_text_input.default_mode = EditorMode::Insert;
+        self.query_params_table.selection_text_input.default_mode = default_mode;
         self.auth_basic_username_text_input.default_mode = default_mode;
         self.auth_basic_password_text_input.default_mode = default_mode;
         self.auth_bearer_token_text_input.default_mode = default_mode;
@@ -137,9 +138,9 @@ impl App<'_> {
         self.auth_digest_realm_text_input.default_mode = default_mode;
         self.auth_digest_nonce_text_input.default_mode = default_mode;
         self.auth_digest_opaque_text_input.default_mode = default_mode;
-        self.headers_table.selection_text_input.default_mode = EditorMode::Insert;
+        self.headers_table.selection_text_input.default_mode = default_mode;
         self.body_text_area.default_mode = default_mode;
-        self.body_form_table.selection_text_input.default_mode = EditorMode::Insert;
+        self.body_form_table.selection_text_input.default_mode = default_mode;
         self.body_file_text_input.default_mode = default_mode;
         self.message_text_area.default_mode = default_mode;
         self.script_console.pre_request_text_area.default_mode = default_mode;
@@ -173,10 +174,14 @@ impl App<'_> {
         self.script_console.pre_request_text_area.is_single_line = false;
         self.script_console.post_request_text_area.is_single_line = false;
 
-        self.env_editor_table.selection_text_input.insert_mode_only = true;
-        self.query_params_table.selection_text_input.insert_mode_only = true;
-        self.headers_table.selection_text_input.insert_mode_only = true;
-        self.body_form_table.selection_text_input.insert_mode_only = true;
+        self.env_editor_table.selection_text_input.insert_mode_only = false;
+        self.query_params_table.selection_text_input.insert_mode_only = false;
+        self.headers_table.selection_text_input.insert_mode_only = false;
+        self.body_form_table.selection_text_input.insert_mode_only = false;
+
+        // Rename inputs are insert-only so the popup has no Normal mode.
+        self.rename_collection_input.insert_mode_only = true;
+        self.rename_request_input.insert_mode_only = true;
 
         self.env_editor_table.selection_text_input.update_handler();
         self.new_collection_input.update_handler();

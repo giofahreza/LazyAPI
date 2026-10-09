@@ -7,7 +7,6 @@ use ratatui::Terminal;
 use tracing::{debug};
 
 use crate::app::app::App;
-use crate::app::files::key_bindings::KEY_BINDINGS;
 use crate::get_key_bindings;
 use crate::tui::app_states::AVAILABLE_EVENTS;
 use crate::tui::event_key_bindings::EventKeyBinding;
@@ -305,34 +304,46 @@ impl App<'_> {
         // Refreshes the app every tick_rate
         if event::poll(self.tick_rate).unwrap() {
             // Block while a key is pressed
-            if let Event::Key(key_event) = event::read().unwrap() {
-                // We do not need
-                if key_event.kind != KeyEventKind::Press {
-                    return;
-                }
+            match event::read().unwrap() {
+                Event::Key(key_event) => {
+                    if key_event.kind != KeyEventKind::Press {
+                        return;
+                    }
 
-                let key = KeyCombination::from(key_event);
-                let is_input_missed = self.handle_key(key, terminal).await;
+                    let key = KeyCombination::from(key_event);
+                    let is_input_missed = self.handle_key(key, terminal).await;
 
-                if !is_input_missed {
-                    debug!("Key pressed: {}", key);
+                    if !is_input_missed {
+                        debug!("Key pressed: {}", key);
+                    }
                 }
+                Event::Paste(text) if self.search.is_open() => self.paste_search(text),
+                Event::Paste(text) if !self.should_display_help && self.editor_command.is_none() => {
+                    if let Some(input) = self.active_input_mut() {
+                        input.paste(text);
+                        self.editor_notice = None;
+                    }
+                }
+                _ => {}
             }
         }
 
-        let received_response = *self.received_response.lock();
-        if received_response {
-            self.tui_highlight_response_body_and_console();
-            self.tui_refresh_result_scrollbars();
+        self.process_response_updates();
+    }
 
-            if self.config.should_save_requests_response() {
-                let selection = self.collections_tree.state.selected().to_vec();
-                if selection.len() > 0 {
-                    self.save_collection_to_file(selection[0]);
-                }
+    pub fn process_response_updates(&mut self) {
+        let updates = std::mem::take(&mut *self.received_response.lock());
+        let mut refresh = false;
+        let mut collections = std::collections::BTreeSet::new();
+        for request in updates.into_iter().filter_map(|r| r.upgrade()) {
+            if let Some(location) = self.request_location(&request) {
+                collections.insert(location.0);
+                refresh |= self.collections_tree.selected == Some(location);
             }
-
-            *self.received_response.lock() = false;
+        }
+        if refresh { self.refresh_active_response(); }
+        if self.config.should_save_requests_response() {
+            for collection in collections { self.save_collection_to_file(collection); }
         }
     }
 
@@ -340,34 +351,33 @@ impl App<'_> {
         // Debug tool
         //dbg!("{}", key.to_string());
 
-        {
-            let key_bindings = KEY_BINDINGS.read();
-
-            // Help is being displayed
-            if self.should_display_help {
-                match key {
-                    key if key == key_bindings.generic.navigation.go_back => self.should_display_help = false,
-                    key if key == key_bindings.generic.navigation.move_cursor_left => self.help_popup.previous_page(),
-                    key if key == key_bindings.generic.navigation.move_cursor_right => self.help_popup.next_page(),
-
-                    _ => {}
-                }
-
-                // Avoid triggering other keys
-                return false;
-            }
-            // Help is not being displayed
-            else if key == key_bindings.generic.display_help && !self.in_input() {
-                self.should_display_help = true;
-                self.help_popup.selection = self.state;
-                return false;
-            }
+        let raw: ratatui::crossterm::event::KeyEvent = key.into();
+        let key = if raw.code == ratatui::crossterm::event::KeyCode::Char('[')
+            && raw.modifiers.contains(ratatui::crossterm::event::KeyModifiers::CONTROL) {
+            crokey::key!(esc)
+        } else { key };
+        // Query text can include saved values; do not log these keystrokes.
+        if self.handle_search_key(key) { return true; }
+        if self.handle_editor_command(key) { return false; }
+        if self.handle_window_key(key) { return false; }
+        if self.handle_help_key(key) { return false; }
+        if self.handle_environment_key(key) { return false; }
+        if self.handle_workspace_key(key) { return false; }
+        if self.handle_editor_key(key, terminal).await { return false; }
+        if key == crokey::key!(ctrl-enter) && self.state == crate::tui::app_states::AppState::SelectedRequest
+            && self.pane == crate::tui::workspace::Pane::Parameters
+            && self.request_param_tab == crate::tui::ui::param_tabs::param_tabs::RequestParamsTabs::Message {
+            self.tui_send_request_message().await;
+            return false;
         }
+        let entry_key = key;
+        let key = self.navigation_alias(key);
+        let previous_state = self.state;
 
         let mut miss_input = false;
         let mut matching_event: Option<&AppEvent> = None;
 
-        let available_app_events = AVAILABLE_EVENTS.read();
+        let available_app_events = AVAILABLE_EVENTS.read().clone();
 
         for possible_event in available_app_events.iter() {
             let event_key_bindings = possible_event.get_event_key_bindings();
@@ -390,7 +400,7 @@ impl App<'_> {
                 MoveCollectionCursorDown(_) => self.collections_tree.down(),
 
                 SelectRequestOrExpandCollection(_) => self.select_request_or_expand_collection(),
-                ExpandCollection(_) => { self.collections_tree.state.toggle_selected(); },
+                ExpandCollection(_) => self.select_request_or_expand_collection(),
                 UnselectRequest(_) => self.unselect_request(),
 
                 CreateElement(_) => self.choose_element_to_create_state(),
@@ -416,7 +426,8 @@ impl App<'_> {
                 },
                 EnvVariablesMoveUp(_) => self.env_editor_table.up(),
                 EnvVariablesMoveDown(_) => self.env_editor_table.down(),
-                EnvVariablesMoveLeft(_) | EnvVariablesMoveRight(_) => self.env_editor_table.change_y(),
+                EnvVariablesMoveLeft(_) => self.env_editor_table.select_column(0),
+                EnvVariablesMoveRight(_) => self.env_editor_table.select_column(1),
                 CreateEnvVariable(_) => self.tui_create_env_variable(),
                 DeleteEnvVariable(_) => self.tui_delete_env_variable(),
 
@@ -494,25 +505,13 @@ impl App<'_> {
                 },
 
 
-                RenameCollection(_) => match self.rename_collection_input.is_in_default_mode() {
-                    true => self.tui_rename_collection(),
-                    false => self.rename_collection_input.key_event(key, None),
-                },
-                CancelRenameCollection(_) => match self.rename_collection_input.is_in_default_mode() {
-                    true => self.normal_state(),
-                    false => self.rename_collection_input.key_event(key, None),
-                },
+                RenameCollection(_) => self.tui_rename_collection(),
+                CancelRenameCollection(_) => self.normal_state(),
                 KeyEventRenameCollection(_) => self.rename_collection_input.key_event(key, None),
 
 
-                RenameRequest(_) => match self.rename_request_input.is_in_default_mode() {
-                    true => self.tui_rename_request(),
-                    false => self.rename_request_input.key_event(key, None),
-                },
-                CancelRenameRequest(_) => match self.rename_request_input.is_in_default_mode() {
-                    true => self.normal_state(),
-                    false => self.rename_request_input.key_event(key, None),
-                },
+                RenameRequest(_) => self.tui_rename_request(),
+                CancelRenameRequest(_) => self.normal_state(),
                 KeyEventRenameRequest(_) => self.rename_request_input.key_event(key, None),
 
 
@@ -541,7 +540,8 @@ impl App<'_> {
                 },
                 RequestQueryParamsMoveUp(_) => self.query_params_table.up(),
                 RequestQueryParamsMoveDown(_) => self.query_params_table.down(),
-                RequestQueryParamsMoveLeft(_) | RequestQueryParamsMoveRight(_) => self.query_params_table.change_y(),
+                RequestQueryParamsMoveLeft(_) => self.query_params_table.select_column(0),
+                RequestQueryParamsMoveRight(_) => self.query_params_table.select_column(1),
                 CreateRequestQueryParam(_) => self.tui_create_new_query_param(),
                 DeleteRequestQueryParam(_) => self.tui_delete_query_param(),
                 ToggleRequestQueryParam(_) => self.tui_toggle_query_param(),
@@ -568,7 +568,8 @@ impl App<'_> {
                 },
                 RequestHeadersMoveUp(_) => self.headers_table.up(),
                 RequestHeadersMoveDown(_) => self.headers_table.down(),
-                RequestHeadersMoveLeft(_) | RequestHeadersMoveRight(_) => self.headers_table.change_y(),
+                RequestHeadersMoveLeft(_) => self.headers_table.select_column(0),
+                RequestHeadersMoveRight(_) => self.headers_table.select_column(1),
                 CreateRequestHeader(_) => self.tui_create_new_header(),
                 DeleteRequestHeader(_) => self.tui_delete_header(),
                 ToggleRequestHeader(_) => self.tui_toggle_header(),
@@ -583,7 +584,8 @@ impl App<'_> {
 
                 RequestBodyTableMoveUp(_) => self.body_form_table.up(),
                 RequestBodyTableMoveDown(_) => self.body_form_table.down(),
-                RequestBodyTableMoveLeft(_) | RequestBodyTableMoveRight(_) => self.body_form_table.change_y(),
+                RequestBodyTableMoveLeft(_) => self.body_form_table.select_column(0),
+                RequestBodyTableMoveRight(_) => self.body_form_table.select_column(1),
                 CreateRequestBodyTableElement(_) => self.tui_create_new_form_data(),
                 DeleteRequestBodyTableElement(_) => self.tui_delete_form_data(),
                 ToggleRequestBodyTableElement(_) => self.tui_toggle_form_data(),
@@ -874,6 +876,13 @@ impl App<'_> {
             }
         };
 
+        if self.state != previous_state { self.begin_text_edit(entry_key); }
+        // Changing a body type can make a previously non-text panel editable.
+        if key == KEY_BINDINGS.read().request_selected.param_tabs.change_body_content_type {
+            self.open_focused_body_editor();
+        }
+        self.sync_request_tabs();
         return miss_input;
     }
 }
+use crate::app::files::key_bindings::KEY_BINDINGS;

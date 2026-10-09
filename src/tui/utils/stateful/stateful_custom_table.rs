@@ -1,10 +1,11 @@
 use crate::app::files::theme::THEME;
+use crate::app::files::key_bindings::KEY_BINDINGS;
 use crate::models::request::KeyValue;
 use crate::tui::utils::stateful::text_input::{SingleLineTextInput, TextInput};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Direction::{Horizontal, Vertical};
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::prelude::{Line, Modifier, StatefulWidget, Style, Stylize, Widget};
+use ratatui::prelude::{Line, StatefulWidget, Style, Stylize, Widget};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
 
@@ -37,6 +38,18 @@ impl<'a> StatefulCustomTable<'a> {
         }
     }
 
+    pub fn clamp_selection(&mut self) {
+        let selection = if self.rows.is_empty() { None } else {
+            let (row, col) = self.selection.unwrap_or((0, 0));
+            Some((row.min(self.rows.len() - 1), col.min(1)))
+        };
+        self.update_selection(selection);
+    }
+
+    pub fn select_column(&mut self, column: usize) {
+        if let Some((row, _)) = self.selection { self.update_selection(Some((row, column))); }
+    }
+
     pub fn update_selection(&mut self, selection: Option<(usize, usize)>) {
         match selection {
             None => {
@@ -47,26 +60,14 @@ impl<'a> StatefulCustomTable<'a> {
             Some(selection) => {
                 self.selection = Some(selection);
                 self.left_state.select(Some(selection.0));
-                self.right_state.select(Some(selection.1));
+                self.right_state.select(Some(selection.0));
             }
         }
     }
     
-    fn decrement_x(&self, i: usize) -> usize {
-        if i == 0 {
-            self.rows.len() - 1
-        } else {
-            i - 1
-        }
-    }
+    fn decrement_x(&self, i: usize) -> usize { i.saturating_sub(1) }
 
-    fn increment_x(&self, i: usize) -> usize {
-        if i >= self.rows.len() - 1 {
-            0
-        } else {
-            i + 1
-        }
-    }
+    fn increment_x(&self, i: usize) -> usize { i.saturating_add(1).min(self.rows.len().saturating_sub(1)) }
 
     pub fn change_y(&mut self) {
         if self.rows.is_empty() || self.selection.is_none() {
@@ -146,7 +147,10 @@ impl<'a> StatefulWidget for &'a mut StatefulCustomTable<'_> {
     fn render(self, area: Rect, buf: &mut Buffer, rows: &mut Self::State) where Self: Sized {
         match self.selection {
             None => {
-                let headers_paragraph = Paragraph::new(self.empty_rows_lines.clone()).centered();
+                let mut lines = self.empty_rows_lines.clone();
+                lines.push(Line::from(format!("(Add one with {})", KEY_BINDINGS.read().generic.list_and_table_actions.create_element))
+                    .fg(ratatui::style::Color::White));
+                let headers_paragraph = Paragraph::new(lines).centered();
 
                 headers_paragraph.render(area, buf);
             },
@@ -174,18 +178,18 @@ impl<'a> StatefulWidget for &'a mut StatefulCustomTable<'_> {
                     .block(
                         Block::new()
                             .borders(Borders::BOTTOM | Borders::RIGHT)
-                            .fg(THEME.read().ui.secondary_foreground_color)
+                            .border_style(Style::new().fg(THEME.read().palette.grid_border))
                     )
-                    .fg(THEME.read().ui.secondary_foreground_color);
+                    .fg(THEME.read().palette.grid_header_text).bg(THEME.read().palette.grid_header).bold();
 
                 let form_value = Paragraph::new(self.default_value)
                     .centered()
                     .block(
                         Block::new()
                             .borders(Borders::BOTTOM)
-                            .fg(THEME.read().ui.secondary_foreground_color)
+                            .border_style(Style::new().fg(THEME.read().palette.grid_border))
                     )
-                    .fg(THEME.read().ui.secondary_foreground_color);
+                    .fg(THEME.read().palette.grid_header_text).bg(THEME.read().palette.grid_header).bold();
 
                 title.render(inner_layout[0], buf);
                 form_value.render(inner_layout[1], buf);
@@ -202,18 +206,8 @@ impl<'a> StatefulWidget for &'a mut StatefulCustomTable<'_> {
                     .horizontal_margin(horizontal_margin)
                     .split(layout[1]);
 
-                let mut left_list_style = Style::default();
-                let mut right_list_style = Style::default();
-
-                match selection.1 {
-                    0 => left_list_style = left_list_style
-                        .add_modifier(Modifier::BOLD)
-                        .fg(THEME.read().others.selection_highlight_color),
-                    1 => right_list_style = right_list_style
-                        .add_modifier(Modifier::BOLD)
-                        .fg(THEME.read().others.selection_highlight_color),
-                    _ => {}
-                }
+                let left_list_style = THEME.read().selected();
+                let right_list_style = THEME.read().selected();
 
                 let left_list = List::new(rows.0.to_owned())
                     .highlight_style(left_list_style)
@@ -223,8 +217,8 @@ impl<'a> StatefulWidget for &'a mut StatefulCustomTable<'_> {
                     .highlight_style(right_list_style)
                     .fg(THEME.read().ui.font_color);
 
-                StatefulWidget::render(left_list, table_layout[0], buf, &mut self.left_state.clone());
-                StatefulWidget::render(right_list, table_layout[1], buf, &mut self.right_state.clone());
+                StatefulWidget::render(left_list, table_layout[0], buf, &mut self.left_state);
+                StatefulWidget::render(right_list, table_layout[1], buf, &mut self.right_state);
 
                 // Form input & cursor
 
@@ -244,13 +238,17 @@ impl<'a> StatefulWidget for &'a mut StatefulCustomTable<'_> {
                     _ => 0
                 };
 
-                let height_adjustment = (selection.0 - self.left_state.offset()) as u16 % layout[1].height;
+                if layout[1].height == 0 { return; }
+                let height_adjustment = selection.0.saturating_sub(self.left_state.offset()) as u16 % layout[1].height;
 
                 let selection_position_x = layout[1].x + width_adjustment + horizontal_margin;
                 let selection_position_y = layout[1].y + height_adjustment;
 
                 let text_rect = Rect::new(selection_position_x, selection_position_y, cell_with.saturating_sub(horizontal_margin), 1);
 
+                if !self.is_editing {
+                    buf.set_style(text_rect.intersection(area), THEME.read().active_cell());
+                }
                 if self.is_editing {
                     self.selection_text_input.display_cursor = true;
                     self.selection_text_input.highlight_text = true;

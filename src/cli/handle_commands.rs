@@ -184,10 +184,19 @@ impl App<'_> {
 
     fn handle_env_commands(&mut self, env_command: &EnvCommand) -> anyhow::Result<()> {
         let env_index = match &env_command.env_subcommand {
-            EnvSubcommand::Info { env_name, .. } | EnvSubcommand::Key { env_name, .. }=> self.find_environment(env_name)?
+            EnvSubcommand::List => {
+                for env in &self.environments { println!("{}", env.read().name); }
+                return Ok(());
+            }
+            EnvSubcommand::New { env_name } => return self.create_environment(env_name).map(|_| ()),
+            EnvSubcommand::Info { env_name, .. } | EnvSubcommand::Key { env_name, .. }
+                | EnvSubcommand::Rename { env_name, .. } | EnvSubcommand::Delete { env_name } => self.find_environment(env_name)?
         };
 
         match &env_command.env_subcommand {
+            EnvSubcommand::List | EnvSubcommand::New { .. } => unreachable!(),
+            EnvSubcommand::Rename { new_name, .. } => self.rename_environment(env_index, new_name),
+            EnvSubcommand::Delete { .. } => self.delete_environment(env_index),
             EnvSubcommand::Info { os_vars, .. } => self.cli_describe_env(env_index, *os_vars),
             EnvSubcommand::Key { subcommand, .. } => match subcommand {
                 KeyCommand::Get { key } => self.get_env_value(env_index, key),

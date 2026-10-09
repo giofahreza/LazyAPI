@@ -1,13 +1,11 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::prelude::{Modifier, Style};
-use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders};
+use ratatui::prelude::Style;
+use crate::app::files::theme::THEME;
 use tui_tree_widget::{Tree, TreeItem};
 use rayon::prelude::*;
 
 use crate::app::app::App;
-use crate::app::files::theme::THEME;
 
 impl<'a> App<'a> {
     pub(super) fn render_collections(&mut self, frame: &mut Frame, rect: Rect) {
@@ -20,22 +18,19 @@ impl<'a> App<'a> {
             .collect();
 
         
+        self.collections_tree.items = items;
         let tree_items = self.collections_tree.items.clone();
         
         let collections_tree = Tree::new(&tree_items)
             .unwrap()
-            .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-            .highlight_symbol(">")
+            .style(Style::new().fg(THEME.read().ui.font_color).bg(THEME.read().ui.main_background_color))
+            .highlight_style(THEME.read().selected())
+            .highlight_symbol("› ")
             .node_closed_symbol("")
             .node_no_children_symbol("")
             .block(
-                Block::default()
-                    .title("Collections")
-                    .borders(Borders::ALL)
-                    .fg(THEME.read().ui.main_foreground_color)
+                THEME.read().panel(self.pane_title(crate::tui::workspace::Pane::Collections), self.pane == crate::tui::workspace::Pane::Collections)
             );
-
-        self.collections_tree.items = items;
 
         frame.render_stateful_widget(
             collections_tree,

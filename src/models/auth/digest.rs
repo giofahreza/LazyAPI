@@ -25,12 +25,14 @@ pub struct Digest {
     /// True if the server nonce expired.
     /// This is sent in response to an auth attempt with an older digest.
     /// The response should contain a new WWW-Authenticate header.
+    #[arg(action = clap::ArgAction::Set)]
     pub stale: bool,
     /// Hashing algo
     pub algorithm: DigestAlgorithm,
     /// Digest algorithm variant
     pub qop: DigestQop,
     /// Flag that the server supports user-hashes
+    #[arg(action = clap::ArgAction::Set)]
     pub user_hash: bool,
     /// Server-supported charset
     pub charset: DigestCharset,

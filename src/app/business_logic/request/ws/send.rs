@@ -17,16 +17,16 @@ use crate::models::protocol::ws::ws::{Message, Sender, Websocket};
 use crate::models::request::Request;
 use crate::models::response::{RequestResponse, ResponseContent};
 
-pub async fn send_ws_request(prepared_request: reqwest_middleware::RequestBuilder, local_request: Arc<RwLock<Request>>, env: &Option<Arc<RwLock<Environment>>>, received_response: Arc<Mutex<bool>>) -> Result<RequestResponse, RequestResponseError> {
+pub async fn send_ws_request(prepared_request: reqwest_middleware::RequestBuilder, local_request: Arc<RwLock<Request>>, env: &Option<Arc<RwLock<Environment>>>, received_response: crate::models::response_updates::ResponseUpdates) -> Result<RequestResponse, RequestResponseError> {
     info!("Sending request");
 
-    let mut request = local_request.write();
-    request.is_pending = true;
-
+    let request = {
+        let mut request = local_request.write();
+        request.is_pending = true;
+        request.get_ws_request_mut().unwrap().is_connected = false;
+        request.clone()
+    };
     let cancellation_token = request.cancellation_token.clone();
-
-    let ws_request = request.get_ws_request_mut().unwrap();
-    ws_request.is_connected = false;
 
     let timeout = tokio::time::sleep(Duration::from_secs(30));
 
@@ -92,7 +92,7 @@ pub async fn send_ws_request(prepared_request: reqwest_middleware::RequestBuilde
                     Err(error) => return Err(RequestResponseError::WebsocketError(error))
                 };
                 let (tx, rx) = websocket.split();
-                ws_request.websocket = Some(Websocket {
+                local_request.write().get_ws_request_mut().unwrap().websocket = Some(Websocket {
                     rx: Arc::new(Mutex::new(rx)),
                     tx: Arc::new(Mutex::new(tx))
                 });
@@ -195,7 +195,7 @@ pub async fn send_ws_request(prepared_request: reqwest_middleware::RequestBuilde
                             sender: Sender::Server
                         });
 
-                        *received_response.lock() = true;
+                        crate::models::response_updates::notify_response(&received_response, &local_request);
                     },
                     None => {}
                 }

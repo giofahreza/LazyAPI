@@ -1,11 +1,10 @@
 use crate::app::app::App;
 use crate::app::files::theme::THEME;
 use crate::tui::app_states::AppState::{EditingRequestAuthJwtSecret, EditingRequestAuthJwtPayload, SelectedRequest};
-use crate::tui::utils::syntax_highlighting::JSON_SYNTAX_REF;
 use ratatui::layout::Direction::Vertical;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Borders, Paragraph};
 use ratatui::Frame;
 use crate::tui::utils::stateful::text_input::{MultiLineTextInput, SingleLineTextInput};
 
@@ -32,15 +31,15 @@ impl App<'_> {
             (jwt_token.algorithm.clone(), jwt_token.secret_type.clone())
         };
 
-        let mut algorithm_block = Block::new()
+        let mut algorithm_block = THEME.read().panel("", false)
             .title("Algorithm ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
-        let mut secret_type_block = Block::new()
+        let mut secret_type_block = THEME.read().panel("", false)
             .title("Secret type ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
         let mut should_color_blocks = false;
         let mut should_display_cursor = false;
@@ -71,11 +70,11 @@ impl App<'_> {
 
         match input_selected {
             0 if should_color_blocks => {
-                algorithm_block = algorithm_block.fg(THEME.read().others.selection_highlight_color);
+                algorithm_block = algorithm_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
                 algorithm_paragraph = algorithm_paragraph.fg(THEME.read().others.selection_highlight_color);
             },
             1 if should_color_blocks => {
-                secret_type_block = secret_type_block.fg(THEME.read().others.selection_highlight_color);
+                secret_type_block = secret_type_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
                 secret_type_paragraph = secret_type_paragraph.fg(THEME.read().others.selection_highlight_color);
             },
             2 if should_color_blocks => {
@@ -106,6 +105,6 @@ impl App<'_> {
         frame.render_widget(algorithm_paragraph, jwt_token_auth_layout[0]);
         frame.render_widget(secret_type_paragraph, jwt_token_auth_layout[1]);
         frame.render_widget(SingleLineTextInput(&mut self.auth_jwt_secret_text_input), jwt_token_auth_layout[2]);
-        frame.render_widget(MultiLineTextInput(&mut self.auth_jwt_payload_text_area, JSON_SYNTAX_REF.clone()), jwt_token_auth_layout[3]);
+        frame.render_widget(MultiLineTextInput(&mut self.auth_jwt_payload_text_area), jwt_token_auth_layout[3]);
     }
 }

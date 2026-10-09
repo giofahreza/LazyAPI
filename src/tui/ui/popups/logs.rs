@@ -4,18 +4,18 @@ use crate::app::log::LOGS;
 use crate::tui::utils::centered_rect::centered_rect;
 use ratatui::layout::Direction::Vertical;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::prelude::{Color, Line, Span, Style};
+use ratatui::prelude::{Line, Span, Style};
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::Frame;
 use tracing::Level;
 
 impl App<'_> {
     pub fn render_logs_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Logs")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color)
+
             .bg(THEME.read().ui.secondary_background_color);
 
         let area = centered_rect(120, 25, frame.area());
@@ -36,29 +36,31 @@ impl App<'_> {
         let logs = LOGS.lock();
         let mut lines = vec![];
 
-        let main_background_color = THEME.read().ui.main_background_color;
+        let muted_color = THEME.read().ui.secondary_foreground_color;
         let font_color = THEME.read().ui.font_color;
 
         for log in logs.iter() {
             let level_color = match log.1 {
-                Level::ERROR => Color::Red,
-                Level::WARN => Color::Yellow,
-                Level::INFO => Color::Green,
-                Level::DEBUG => Color::Blue,
-                Level::TRACE => Color::Magenta,
+                Level::ERROR => THEME.read().palette.error,
+                Level::WARN => THEME.read().palette.warning,
+                Level::INFO => THEME.read().palette.success,
+                Level::DEBUG => THEME.read().palette.action,
+                Level::TRACE => THEME.read().palette.muted,
             };
-            
+
             lines.push(
                 Line::from(vec![
-                    Span::raw(&log.0).fg(main_background_color),
+                    Span::raw(&log.0).fg(muted_color),
                     Span::raw(format!(" {:>5} ", log.1)).fg(level_color),
-                    Span::raw(format!("{}: ", log.2)).fg(main_background_color),
+                    Span::raw(format!("{}: ", log.2)).fg(muted_color),
                     Span::raw(&log.3).fg(font_color),
                 ])
             );
         }
 
         lines.reverse();
+        self.search.register_lines(crate::tui::search::SearchScope::Logs, &lines, logger_layout[0].width, false);
+        self.search.highlight_lines(crate::tui::search::SearchScope::Logs, &mut lines);
 
         let logs_paragraph = Paragraph::new(lines)
             .scroll((
@@ -74,7 +76,7 @@ impl App<'_> {
         let logger_horizontal_scrollbar = Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
             .style(Style::new().fg(font_color))
             .thumb_symbol("■");
-        
+
         frame.render_stateful_widget(
             logger_vertical_scrollbar,
             area,

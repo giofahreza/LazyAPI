@@ -3,14 +3,14 @@ use ratatui::layout::Direction::Horizontal;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::prelude::Style;
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Borders, Clear, Paragraph};
 
 use crate::app::app::App;
 use crate::app::files::theme::THEME;
 use crate::tui::utils::centered_rect::centered_rect;
 impl App<'_> {
     pub fn render_deleting_collection_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Confirm delete collection")
             .borders(Borders::ALL)
             .style(Style::default().bg(THEME.read().ui.main_background_color));
@@ -28,12 +28,12 @@ impl App<'_> {
             .horizontal_margin(1)
             .split(area);
 
-        let mut no_paragraph = Paragraph::new("no").centered();
-        let mut yes_paragraph = Paragraph::new("yes").centered();
+        let mut no_paragraph = Paragraph::new("[ Cancel ]").centered();
+        let mut yes_paragraph = Paragraph::new("[ Delete ]").centered();
 
         match self.delete_collection_popup.state {
-            false => no_paragraph = no_paragraph.fg(THEME.read().others.selection_highlight_color).bold(),
-            true => yes_paragraph = yes_paragraph.fg(THEME.read().others.selection_highlight_color).bold(),
+            false => no_paragraph = no_paragraph.style(THEME.read().active_cell()),
+            true => yes_paragraph = yes_paragraph.fg(THEME.read().palette.background).bg(THEME.read().palette.error).bold(),
         }
 
         frame.render_widget(Clear, area);

@@ -8,7 +8,8 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
-use snailquote::unescape;
+use snailquote::{escape, unescape};
+use anyhow::Context;
 use tracing::{info, trace, warn};
 use rayon::prelude::*;
 
@@ -27,7 +28,7 @@ lazy_static! {
 impl App<'_> {
     /// Add the environment file to the app environments
     pub fn add_environment_from_file(&mut self, path_buf: &PathBuf) {
-        let file_name = path_buf.file_name().unwrap().to_str().unwrap().to_string().replace(".env.", "");
+        let file_name = path_buf.file_name().unwrap().to_str().unwrap().strip_prefix(".env.").unwrap().to_string();
 
         trace!("Trying to open \"{}\" env file", path_buf.display());
 
@@ -40,6 +41,7 @@ impl App<'_> {
             name: file_name,
             values: read_environment_from_file(env_file),
             path: path_buf.clone(),
+            deleted: false,
         };
         
         self.environments.push(Arc::new(RwLock::new(environment)));
@@ -94,37 +96,46 @@ fn parse_line(entry: &[u8]) -> Option<(String, String)> {
 
 /// Save app environment in a file through a temporary file
 pub fn save_environment_to_file(environment: &Environment) {
+    if let Err(error) = try_save_environment_to_file(environment) {
+        warn!("Could not save environment: {error:#}");
+    }
+}
+
+pub fn environment_contents(environment: &Environment) -> String {
+    environment.values.iter()
+        .map(|(key, value)| format!("{key}={}\n", escape(value)))
+        .collect()
+}
+
+pub fn try_save_environment_to_file(environment: &Environment) -> anyhow::Result<()> {
+    if environment.deleted { return Ok(()); }
     if !ARGS.should_save {
         warn!("Dry-run, not saving the environment");
-        return;
+        return Ok(());
     }
 
     info!("Saving environment \"{}\"", environment.name);
 
-    let temp_file_name = format!("{}_", environment.path.file_name().unwrap().to_str().unwrap());
-
+    let temp_file_name = format!(".lazyapi-env-{}.tmp", uuid::Uuid::new_v4());
     let temp_file_path = environment.path.with_file_name(temp_file_name);
-
-    let mut temp_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&temp_file_path)
-        .expect("Could not open temp file");
-
-    let mut data: String = environment.values
-        .iter()
-        .par_bridge()
-        .map(|(key, value)| format!("{key}={value}\n"))
-        .collect();
-    
-    // Remove trailing \n
-    data.pop();
-
-    temp_file.write_all(data.as_bytes()).expect("Could not write to temp file");
-    temp_file.flush().unwrap();
-
-    fs::rename(temp_file_path, &environment.path).expect("Could not move temp file to environment file");
-
-    trace!("Environment saved")
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)] {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let result = (|| -> anyhow::Result<()> {
+        let mut file = options.open(&temp_file_path).context("Could not create environment temporary file")?;
+        if let Ok(metadata) = fs::metadata(&environment.path) {
+            file.set_permissions(metadata.permissions())?;
+        }
+        file.write_all(environment_contents(environment).as_bytes())?;
+        file.sync_all()?;
+        fs::rename(&temp_file_path, &environment.path).context("Could not save environment file")?;
+        Ok(())
+    })();
+    if result.is_err() { let _ = fs::remove_file(&temp_file_path); }
+    result?;
+    trace!("Environment saved");
+    Ok(())
 }

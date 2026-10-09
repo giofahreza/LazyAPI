@@ -2,7 +2,7 @@ use ratatui::layout::Direction::Vertical;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Paragraph, Tabs};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use strum::{Display, EnumIter, FromRepr};
 
@@ -15,7 +15,6 @@ use crate::models::request::Request;
 use crate::tui::app_states::AppState::{EditingRequestBodyString, EditingRequestBodyTable, EditingRequestHeader, EditingRequestMessage, EditingRequestParam};
 use crate::tui::tui_logic::utils::key_value_vec_to_items_list;
 use crate::tui::utils::stateful::text_input::MultiLineTextInput;
-use crate::tui::utils::syntax_highlighting::{ENV_VARIABLE_SYNTAX_REF, HTML_SYNTAX_REF, JSON_SYNTAX_REF, JS_SYNTAX_REF, XML_SYNTAX_REF};
 
 #[derive(Default, Clone, Copy, PartialEq, Display, FromRepr, EnumIter)]
 pub enum RequestParamsTabs {
@@ -96,8 +95,8 @@ impl App<'_> {
                     RequestParamsTabs::Scripts => tab.to_string(),
                 };
 
-                text.fg(THEME.read().ui.font_color)
-            });
+                text
+            }).collect::<Vec<_>>();
 
         let selected_param_tab_index = match &request.protocol {
             Protocol::HttpRequest(_) => match self.request_param_tab {
@@ -118,15 +117,7 @@ impl App<'_> {
             }
         };
         
-        let params_tabs = Tabs::new(param_tabs)
-            .highlight_style(THEME.read().others.selection_highlight_color)
-            .select(selected_param_tab_index)
-            .block(
-                Block::new().borders(Borders::BOTTOM)
-                    .fg(THEME.read().ui.main_foreground_color)
-            );
-
-        frame.render_widget(params_tabs, request_params_layout[0]);
+        crate::tui::ui::tabs::render_tabs(frame, request_params_layout[0], &param_tabs, selected_param_tab_index, false);
 
         // REQUEST PARAM TABS CONTENT
 
@@ -144,7 +135,7 @@ impl App<'_> {
                         let auth_lines = vec![
                             Line::default(),
                             Line::from("No auth").fg(THEME.read().ui.font_color),
-                            Line::from("(Change auth method with ^a)").fg(THEME.read().ui.secondary_foreground_color)
+                            Line::from("Ctrl+a change auth method").fg(ratatui::style::Color::White)
                         ];
 
                         let auth_paragraph = Paragraph::new(auth_lines).centered();
@@ -172,7 +163,7 @@ impl App<'_> {
                         let body_lines = vec![
                             Line::default(),
                             Line::from("No body").fg(THEME.read().ui.font_color),
-                            Line::from("(Change body type with ^b)").fg(THEME.read().ui.secondary_foreground_color)
+                            Line::from("Ctrl+b change body type").fg(ratatui::style::Color::White)
                         ];
 
                         let body_paragraph = Paragraph::new(body_lines).centered();
@@ -191,18 +182,9 @@ impl App<'_> {
                     },
                     Raw(_) | Json(_) | Xml(_) | Html(_) | Javascript(_) => {
                         let display_cursor = matches!(&self.state, EditingRequestBodyString);
-                        let syntax_reference = match &http_request.body {
-                            Raw(_) => ENV_VARIABLE_SYNTAX_REF.clone(),
-                            Json(_) => JSON_SYNTAX_REF.clone(),
-                            Xml(_) => XML_SYNTAX_REF.clone(),
-                            Html(_) => HTML_SYNTAX_REF.clone(),
-                            Javascript(_) => JS_SYNTAX_REF.clone(),
-                            _ => unreachable!()
-                        };
-                        
                         self.body_text_area.display_cursor = display_cursor;
 
-                        frame.render_widget(MultiLineTextInput(&mut self.body_text_area, syntax_reference), request_params_layout[1]);
+                        frame.render_widget(MultiLineTextInput(&mut self.body_text_area), request_params_layout[1]);
                     }
                 }
             },
@@ -211,7 +193,8 @@ impl App<'_> {
 
                 self.message_text_area.display_cursor = display_cursor;
 
-                frame.render_widget(MultiLineTextInput(&mut self.message_text_area, ENV_VARIABLE_SYNTAX_REF.clone()), request_params_layout[1]);            }
+                frame.render_widget(MultiLineTextInput(&mut self.message_text_area), request_params_layout[1]);
+            }
             RequestParamsTabs::Scripts => {
                 self.render_request_script(frame, request_params_layout[1]);
             }

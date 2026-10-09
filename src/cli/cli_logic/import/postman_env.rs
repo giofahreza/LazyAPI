@@ -70,7 +70,8 @@ impl App<'_> {
         let mut env = Environment {
             name: postman_environment.name,
             values: IndexMap::new(),
-            path
+            path,
+            deleted: false,
         };
 
         for env_variable in postman_environment.values {

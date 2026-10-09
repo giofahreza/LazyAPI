@@ -1,25 +1,23 @@
 use crate::app::files::key_bindings::{CustomTextArea, TextAreaMode, KEY_BINDINGS};
 use crate::app::files::theme::THEME;
-use crate::tui::utils::syntax_highlighting::{ENV_VARIABLE_SYNTAX_REF, ENV_VARIABLE_SYNTAX_SET, SYNTAX_SET, SYNTAX_THEME, THEME_SET};
-use crokey::KeyCombination;
+use crokey::{key, KeyCombination};
 use edtui::actions::insert::PushLine;
 use edtui::actions::motion::MoveToFirstRow;
 use edtui::actions::search::StartSearch;
 use edtui::actions::{Composed, CopySelection, DeleteChar, FindNext, FindPrevious, InsertChar, LineBreak, MoveBackward, MoveDown, MoveForward, MoveToEndOfLine, MoveToStartOfLine, MoveUp, MoveWordBackward, MoveWordForward, OpenSystemEditor, Paste, Redo, RemoveChar, RemoveCharFromSearch, SelectCurrentSearch, StopSearch, SwitchMode, Undo};
 use edtui::events::{KeyEventHandler, KeyEventRegister, KeyInput};
-use edtui::{system_editor, EditorEventHandler, EditorMode, EditorState, EditorStatusLine, EditorTheme, EditorView, LineNumbers, SyntaxHighlighter};
+use edtui::{system_editor, EditorEventHandler, EditorMode, EditorState, EditorStatusLine, EditorTheme, EditorView, LineNumbers};
+use ratatui::crossterm::cursor::SetCursorStyle;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::HorizontalAlignment;
-use ratatui::prelude::{Constraint, Layout, Rect, Span, Style, Stylize, Widget};
-use ratatui::style::Color;
-use ratatui::widgets::{Block, Borders, Padding};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::prelude::{Modifier, Rect, Style, Widget};
+use ratatui::widgets::Padding;
 use ratatui::Terminal;
 use std::collections::HashMap;
 use std::io::Stdout;
-use syntect::parsing::SyntaxReference;
 
+#[derive(Clone)]
 pub struct TextInput {
     pub state: EditorState,
     pub event_handler: Option<EditorEventHandler>,
@@ -29,26 +27,176 @@ pub struct TextInput {
     pub insert_mode_only: bool,
     pub highlight_text: bool,
     pub highlight_block: bool,
-    pub display_cursor: bool
+    pub display_cursor: bool,
+    pub saved_text: String,
+    pub vim_pending: String,
+    /// Filled in by the widget's `render` with the on-screen cell of the
+    /// editor's cursor so the main render can hand it to the terminal.
+    pub last_cursor_screen_cell: Option<(u16, u16)>,
 }
 
 pub struct SingleLineTextInput<'a>(pub &'a mut TextInput);
-pub struct MultiLineTextInput<'a>(pub &'a mut TextInput, pub SyntaxReference);
+pub struct MultiLineTextInput<'a>(pub &'a mut TextInput);
+
+/// The cell width of a single source character, accounting for tabs and
+/// Unicode wide glyphs (CJK, emoji). edtui uses tab_width 2 for single-line
+/// editors and 4 for multi-line editors.
+fn char_cell_width(ch: char, tab_width: usize) -> usize {
+    if ch == '\t' { tab_width } else { unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1) }
+}
+
+/// Map an editor mode to the terminal cursor shape we want the OS to draw.
+/// The terminal remembers the shape across frames, so the caller can emit
+/// the escape once per mode change.
+pub fn cursor_shape_for_mode(mode: EditorMode) -> SetCursorStyle {
+    match mode {
+        EditorMode::Insert | EditorMode::Search => SetCursorStyle::BlinkingBar,
+        EditorMode::Normal | EditorMode::Visual => SetCursorStyle::BlinkingBar,
+    }
+}
+
+fn input_theme(input: &TextInput) -> EditorTheme<'static> {
+    let theme = THEME.read();
+    // Insert mode: no painted cursor. The real terminal draws a caret on
+    // top of the insertion point (see `cursor_shape_for_mode`) and the user can still
+    // read the character underneath.
+    // Normal / Visual mode: keep the original "painted character" cursor
+    // (white background, foreground = background, BOLD) so the cursor still
+    // looks like a recoloured cell instead of a terminal-drawn bar.
+    // Search mode and unfocused fields: no painted cursor.
+    let cursor = if !input.display_cursor
+        || matches!(input.state.mode, EditorMode::Insert | EditorMode::Search)
+    {
+        Style::default()
+    } else {
+        Style::default()
+            .fg(theme.palette.background)
+            .bg(theme.ui.font_color)
+            .add_modifier(Modifier::BOLD)
+    };
+    EditorTheme::default()
+        .base(Style::default().fg(theme.ui.font_color).bg(theme.ui.main_background_color))
+        .line_numbers_style(Style::default().fg(theme.ui.secondary_foreground_color))
+        .cursor_style(cursor)
+        .selection_style(if input.display_cursor {
+            Style::default().fg(theme.ui.font_color).bg(theme.palette.selection)
+        } else { Style::default() })
+}
+
+/// The screen cell that the editor will hand to the terminal as the cursor
+/// position. Returns `None` when no cursor should be shown (unfocused field,
+/// empty buffer area, or the cursor row is scrolled out of view).
+///
+/// `line_number_width` is `0` for single-line editors and `4` for multi-line
+/// editors (matching `LineNumbers::Absolute`). `tab_width` is `1` for
+/// single-line and `4` for multi-line, matching the edtui config used by each
+/// widget in this file.
+fn compute_cursor_screen_cell(
+    input: &TextInput,
+    area: Rect,
+    line_number_width: u16,
+    tab_width: usize,
+) -> Option<(u16, u16)> {
+    if !input.display_cursor { return None; }
+    if area.width == 0 || area.height == 0 { return None; }
+
+    // Mirror the block layout the widget uses at render time. Both
+    // `SingleLineTextInput` and `MultiLineTextInput` render a Block with
+    // `Borders::ALL` and `Padding::horizontal(1)`, so the content lives in
+    // `block.inner(area)`, which shrinks the area by 1 on every side for the
+    // border AND by 1 on the left/right for the padding. Without a block,
+    // the editor spans the whole `area`.
+    let inner = match &input.block_title {
+        Some(_) => {
+            let mut inner = area;
+            // Borders (1 on each side)
+            if inner.width >= 2 { inner.width -= 2; inner.x += 1; }
+            if inner.height >= 2 { inner.height -= 2; inner.y += 1; }
+            // Padding::horizontal(1) (1 on the left, 1 on the right)
+            if inner.width >= 2 { inner.width -= 2; inner.x += 1; }
+            inner
+        }
+        None => area,
+    };
+    if inner.width == 0 || inner.height == 0 { return None; }
+
+    // For multi-line editors edtui draws a 4-char-wide line-number gutter
+    // immediately inside the padding; the text starts to the right of it.
+    let text_x = inner.x.saturating_add(line_number_width);
+    if text_x >= inner.x.saturating_add(inner.width) { return None; }
+    let text_width = inner.width.saturating_sub(line_number_width);
+
+    let cursor = input.state.cursor;
+    let max_row = input.state.lines.len();
+    if cursor.row >= max_row { return None; }
+
+    // Replicate edtui's horizontal scroll: keep the cursor on screen by
+    // shifting the viewport left when the column walks past the right edge
+    // and right when it walks before the left edge.
+    let line_chars = input.state.lines.get(edtui::RowIndex::new(cursor.row))
+        .map(|l| l.clone()).unwrap_or_default();
+    let width_to_col = |col: usize| -> usize {
+        let cap = col.min(line_chars.len());
+        line_chars.iter().take(cap).map(|&c| char_cell_width(c, tab_width)).sum()
+    };
+
+    let mut viewport_start = 0usize;
+    while width_to_col(cursor.col).saturating_sub(width_to_col(viewport_start)) >= text_width as usize {
+        let next = viewport_start + 1;
+        if next > cursor.col { break; }
+        viewport_start = next;
+    }
+    let mut cursor_screen_col = width_to_col(cursor.col).saturating_sub(width_to_col(viewport_start));
+    // edtui's insert cursor is reported just after the character it is
+    // editing. Place the terminal caret on that character, matching the
+    // insertion point shown by desktop text fields.
+    if input.state.mode == EditorMode::Insert && cursor.col > 0 {
+        let previous_width = line_chars.get(cursor.col - 1)
+            .map(|&ch| char_cell_width(ch, tab_width)).unwrap_or(1);
+        cursor_screen_col = cursor_screen_col.saturating_sub(previous_width);
+    }
+    if cursor_screen_col >= text_width as usize { return None; }
+
+    // Vertical viewport for multi-line editors: simple "keep cursor on screen"
+    // window the same way edtui's `update_viewport_vertical` does.
+    let viewport_top = if input.is_single_line {
+        0
+    } else {
+        let height = inner.height as usize;
+        let mut top = 0usize;
+        // Pull the top down while the cursor would be above the window.
+        // (edtui updates the viewport every frame; we re-derive it here.)
+        if cursor.row >= height {
+            top = cursor.row + 1 - height;
+        }
+        top
+    };
+    let cursor_screen_row = cursor.row.saturating_sub(viewport_top);
+    if cursor_screen_row >= inner.height as usize { return None; }
+
+    let screen_x = text_x.saturating_add(cursor_screen_col as u16);
+    let screen_y = inner.y.saturating_add(cursor_screen_row as u16);
+    Some((screen_x, screen_y))
+}
+
+impl TextInput {
+    /// Screen cell for the editor's cursor after the widget has rendered, or
+    /// `None` if the field is unfocused / scrolled away. `is_single_line` is
+    /// `true` for URL/auth/rename inputs and `false` for body / script /
+    /// message editors.
+    pub fn cursor_screen_cell(&self, area: Rect, is_single_line: bool) -> Option<(u16, u16)> {
+        let (gutter, tab_width) = if is_single_line { (0u16, 1usize) } else { (4u16, 4usize) };
+        compute_cursor_screen_cell(self, area, gutter, tab_width)
+    }
+}
 
 impl<'a> Widget for SingleLineTextInput<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
         let new_area = match &self.0.block_title {
             None => area,
             Some(block_title) => {
-                let mut block = Block::new()
-                    .title(block_title.as_str())
-                    .borders(Borders::ALL)
+                let block = THEME.read().panel(block_title.clone(), self.0.highlight_block)
                     .padding(Padding::horizontal(1));
-
-                block = match self.0.highlight_block {
-                    true => block.fg(THEME.read().others.selection_highlight_color),
-                    false => block.fg(THEME.read().ui.main_foreground_color),
-                };
 
                 let block_area = block.inner(area);
 
@@ -59,127 +207,41 @@ impl<'a> Widget for SingleLineTextInput<'a> {
         };
 
 
-        let should_display_status = self.0.display_cursor &&
-            !self.0.insert_mode_only &&
-            !(self.0.default_mode == EditorMode::Insert && self.0.state.mode == EditorMode::Insert);
-
-        let constraints = match should_display_status {
-            true => vec![
-                Constraint::Fill(1),
-                Constraint::Length(6),
-            ],
-            false => vec![
-                Constraint::Fill(1)
-            ]
-        };
-
-        let layout = Layout::horizontal(constraints).split(new_area);
-
-        let mut theme = EditorTheme::default().hide_status_line();
-
-        theme = match self.0.highlight_text {
-            true => theme.base(Style::new().fg(THEME.read().ui.font_color)),
-            false => theme.base(Style::new().fg(THEME.read().others.selection_highlight_color)),
-        };
-
-        if !self.0.display_cursor {
-            theme = theme
-                .cursor_style(Style::new())
-                .selection_style(Style::new());
-        }
-        else if self.0.state.mode == EditorMode::Search {
-            theme = theme.cursor_style(Style::new());
-        }
-
-        let syntax_highlighter = SyntaxHighlighter::with_sets(
-            SYNTAX_THEME.clone(),
-            THEME_SET.clone(),
-            ENV_VARIABLE_SYNTAX_REF.clone(),
-            ENV_VARIABLE_SYNTAX_SET.clone()
-        );
-
-        let editor = EditorView::new(&mut self.0.state)
+        let theme = input_theme(self.0).hide_status_line();
+        EditorView::new(&mut self.0.state)
             .theme(theme)
-            .syntax_highlighter(Some(syntax_highlighter))
-            .wrap(false);
-
-        editor.render(layout[0], buf);
-
-        if should_display_status {
-            let status_line_bg_color = get_color_from_mode(&self.0.state.mode);
-
-            let status_line = Span::raw(self.0.state.mode.name())
-                .style(Style::new().fg(THEME.read().ui.font_color).bg(status_line_bg_color));
-
-            status_line.render(layout[1], buf);
-        }
+            .wrap(false)
+            .render(new_area, buf);
+        // The cursor position is read by the main render and pushed to the
+        // terminal via `frame.set_cursor_position`; we cannot call that from
+        // inside a `Widget::render` (the trait only gives us a `Buffer`), so
+        // we stash the computed cell on the input and the caller picks it up.
+        self.0.last_cursor_screen_cell = self.0.cursor_screen_cell(area, true);
     }
 }
 
 impl<'a> Widget for MultiLineTextInput<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
-        let mut theme = EditorTheme::default()
-            .base(Style::new().fg(THEME.read().ui.font_color))
-            .line_numbers_style(Style::new().fg(THEME.read().ui.secondary_foreground_color));
-
-        if !self.0.display_cursor {
-            theme = theme
-                .hide_status_line()
-                .cursor_style(Style::new())
-                .selection_style(Style::new());
+        let mut theme = input_theme(self.0).hide_status_line();
+        if self.0.display_cursor && self.0.state.mode == EditorMode::Search {
+            theme = theme.status_line(EditorStatusLine::default()
+                .style_line(THEME.read().base())
+                .style_mode(Style::new().fg(THEME.read().palette.accent))
+                .style_search(Style::new().fg(THEME.read().ui.font_color)));
         }
-        else {
-            if self.0.default_mode != EditorMode::Insert || self.0.state.mode == EditorMode::Search {
-                let status_line_bg_color = get_color_from_mode(&self.0.state.mode);
-
-                let status_line = EditorStatusLine::default()
-                    .alignment(HorizontalAlignment::Center)
-                    .style_mode(Style::new().fg(THEME.read().ui.font_color).bg(status_line_bg_color))
-                    .style_search(Style::new().fg(THEME.read().ui.font_color))
-                    .style_line(Style::new());
-
-                theme = theme.status_line(status_line);
-            }
-            else {
-                theme = theme.hide_status_line();
-            }
-        }
-
         if let Some(block_title) = &self.0.block_title {
-            let mut block = Block::new()
-                .title(block_title.as_str())
-                .borders(Borders::ALL)
-                .padding(Padding::horizontal(1));
-
-            block = match self.0.highlight_block {
-                true => block.fg(THEME.read().others.selection_highlight_color),
-                false => block.fg(THEME.read().ui.main_foreground_color),
-            };
-
-            theme = theme.block(block);
+            theme = theme.block(THEME.read().panel(block_title.clone(), self.0.highlight_block)
+                .padding(Padding::horizontal(1)));
         }
-
-        let syntax_set = match &self.1.name == "Double Brace Variables" {
-            true => &*ENV_VARIABLE_SYNTAX_SET,
-            false => &*SYNTAX_SET
-        };
-
-
-        let syntax_highlighter = SyntaxHighlighter::with_sets(
-            SYNTAX_THEME.clone(),
-            THEME_SET.clone(),
-            self.1,
-            syntax_set.clone()
-        );
 
         let editor = EditorView::new(&mut self.0.state)
             .theme(theme)
-            .syntax_highlighter(Some(syntax_highlighter))
             .wrap(false)
             .line_numbers(LineNumbers::Absolute)
             .tab_width(4);
 
-        editor.render(area, buf)
+        editor.render(area, buf);
+        self.0.last_cursor_screen_cell = self.0.cursor_screen_cell(area, false);
     }
 }
 
@@ -197,10 +259,14 @@ impl TextInput {
             highlight_text: false, // Placeholder
             highlight_block: false, // Placeholder
             display_cursor: false, // Placeholder
+            saved_text: String::new(),
+            vim_pending: String::new(),
+            last_cursor_screen_cell: None,
         }
     }
 
     pub fn update_handler(&mut self) {
+        self.vim_pending.clear();
         let editor_handler = EditorEventHandler::new(generate_key_handler(self.is_single_line, self.insert_mode_only));
         self.event_handler = Some(editor_handler);
     }
@@ -223,11 +289,32 @@ impl TextInput {
     }
 
     pub fn clear(&mut self) {
-        self.state.lines.clear();
+        // A new field/request must not inherit another field's undo history or search.
+        self.state = EditorState::default();
+        self.state.mode = self.default_mode;
+        self.saved_text.clear();
+        self.vim_pending.clear();
+        if self.event_handler.is_some() { self.update_handler(); }
     }
 
     pub fn to_string(&self) -> String {
         self.state.lines.to_string()
+    }
+
+    pub fn is_modified(&self) -> bool {
+        self.to_string() != self.saved_text
+    }
+
+    /// Escape ends insertion/selection/search and abandons any pending operator.
+    /// It never saves or closes the field, and is idempotent in Normal mode.
+    pub fn enter_normal_mode(&mut self) {
+        let mode = self.state.mode;
+        if mode == EditorMode::Search { self.state.execute(StopSearch); }
+        if mode == EditorMode::Insert {
+            self.state.cursor.col = self.state.cursor.col.saturating_sub(1);
+        }
+        self.state.execute(SwitchMode(EditorMode::Normal));
+        self.update_handler();
     }
 
     pub fn to_lines(&self) -> Vec<String> {
@@ -285,6 +372,34 @@ impl TextInput {
     pub fn key_event(&mut self, key: KeyCombination, terminal: Option<&mut Terminal<CrosstermBackend<Stdout>>>) {
         let key_event: KeyEvent = key.into();
 
+        if KEY_BINDINGS.read().generic.text_input.mode == TextAreaMode::Vim {
+            if key == key!(esc) {
+                self.enter_normal_mode();
+                return;
+            }
+            // These commands must not become application pane/tab shortcuts.
+            if self.state.mode == EditorMode::Normal && self.vim_pending.is_empty() && key == key!(shift-X) {
+                if self.state.cursor.col > 0 { self.state.execute(DeleteChar(1)); }
+                return;
+            }
+            if self.state.mode == EditorMode::Insert && key == key!(ctrl-w) {
+                let row = self.state.cursor.row;
+                let end = self.state.cursor.col;
+                if let Some(line) = self.state.lines.get(edtui::RowIndex::new(row)) {
+                    let mut start = end.min(line.len());
+                    while start > 0 && line[start - 1].is_whitespace() { start -= 1; }
+                    if start > 0 {
+                        let word = line[start - 1].is_alphanumeric() || line[start - 1] == '_';
+                        while start > 0 && !line[start - 1].is_whitespace()
+                            && (line[start - 1].is_alphanumeric() || line[start - 1] == '_') == word { start -= 1; }
+                    }
+                    self.state.execute(DeleteChar(end.saturating_sub(start)));
+                }
+                return;
+            }
+            if self.handle_inner_object(key_event) { return; }
+        }
+
         match key_event.code {
             KeyCode::Char(_) | KeyCode::Enter |
             KeyCode::Esc | KeyCode::Backspace | KeyCode::Delete |
@@ -295,9 +410,115 @@ impl TextInput {
 
         self.event_handler.as_mut().unwrap().on_key_event(key_event, &mut self.state);
 
+        // edtui keeps its operator lookup private. Mirror only its incomplete
+        // prefixes so application shortcuts cannot steal ci[ / ci] / yi[ etc.
+        if matches!(self.state.mode, EditorMode::Normal | EditorMode::Visual)
+            && !key_event.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+            && let KeyCode::Char(ch) = key_event.code {
+            self.vim_pending.push(ch);
+            if !["c", "ci", "d", "di", "y", "yi", "g", "i"].contains(&self.vim_pending.as_str()) {
+                self.vim_pending.clear();
+            }
+        } else { self.vim_pending.clear(); }
+
         if let Some(terminal) = terminal && system_editor::is_pending(&self.state) {
             system_editor::open(&mut self.state, terminal).ok();
         }
+    }
+
+    pub fn paste(&mut self, text: String) {
+        if self.state.mode == EditorMode::Search {
+            for ch in text.chars().map(|ch| if ch.is_control() { ' ' } else { ch }) {
+                self.state.execute(edtui::actions::search::AppendCharToSearch(ch));
+            }
+            return;
+        }
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let text = if self.is_single_line { text.replace('\n', " ") } else { text };
+        self.update_handler();
+        self.event_handler.as_ref().unwrap().on_paste_event(text, &mut self.state);
+    }
+
+    fn handle_inner_object(&mut self, event: KeyEvent) -> bool {
+        let operator = match (self.state.mode, self.vim_pending.as_str()) {
+            (EditorMode::Normal, "ci") => 'c',
+            (EditorMode::Normal, "di") => 'd',
+            (EditorMode::Normal, "yi") => 'y',
+            (EditorMode::Visual, "i") => 'v',
+            _ => return false,
+        };
+        if event.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) { return false; }
+        let (open, close) = match event.code {
+            KeyCode::Char('(' | ')') => ('(', ')'),
+            KeyCode::Char('[' | ']') => ('[', ']'),
+            KeyCode::Char('{' | '}') => ('{', '}'),
+            KeyCode::Char('"') => ('"', '"'),
+            KeyCode::Char('\'') => ('\'', '\''),
+            _ => return false,
+        };
+        self.update_handler();
+        // edtui's delimiter action includes an opening delimiter under the
+        // cursor and leaves a change in Visual mode. Resolve the actual inner
+        // range here, including empty/nested pairs and multiline JSON bodies.
+        let mut chars = Vec::new();
+        let mut positions = Vec::new();
+        let lines = self.state.lines.to_vecs();
+        for (row, line) in lines.iter().enumerate() {
+            for (col, ch) in line.iter().enumerate() {
+                chars.push(*ch);
+                positions.push(edtui::Index2::new(row, col));
+            }
+            if row + 1 < lines.len() {
+                chars.push('\n');
+                positions.push(edtui::Index2::new(row, line.len()));
+            }
+        }
+        let Some(cursor) = positions.iter().position(|pos| *pos == self.state.cursor) else { return true; };
+        let mut stack = Vec::new();
+        let mut pairs = Vec::new();
+        let mut quote = None;
+        let mut escaped = false;
+        for (index, &ch) in chars.iter().enumerate() {
+            if escaped { escaped = false; continue; }
+            if ch == '\\' { escaped = true; continue; }
+            if open == close {
+                // Quoted objects stay on the cursor's line, like Vim's i"/i'.
+                if positions[index].row != self.state.cursor.row { continue; }
+                if ch == open {
+                    if let Some(start) = stack.pop() { pairs.push((start, index)); }
+                    else { stack.push(index); }
+                }
+            } else if let Some(delimiter) = quote {
+                if ch == delimiter { quote = None; }
+            } else if ch == '"' || ch == '\'' { quote = Some(ch); }
+            else if ch == open { stack.push(index); }
+            else if ch == close && let Some(start) = stack.pop() { pairs.push((start, index)); }
+        }
+        let range = pairs.iter().copied().filter(|&(start, end)| start <= cursor && cursor <= end).max_by_key(|&(start, _)| start)
+            .or_else(|| if open == close { pairs.iter().copied().filter(|&(start, _)| start > cursor).min_by_key(|&(start, _)| start) } else { None });
+        let Some((start, end)) = range else { return true; };
+        if operator == 'c' { self.state.execute(SwitchMode(EditorMode::Insert)); }
+        let empty = end == start + 1;
+        if empty { self.state.selection = None; }
+        else {
+            let mode = self.state.mode;
+            self.state.execute(SwitchMode(EditorMode::Visual));
+            let selection = self.state.selection.as_mut().unwrap();
+            selection.start = positions[start + 1];
+            selection.end = positions[end - 1];
+            self.state.mode = mode;
+        }
+        match operator {
+            'c' => {
+                self.state.execute(edtui::actions::ChangeSelection);
+                self.state.cursor = positions[start + 1];
+            }
+            'd' => self.state.execute(edtui::actions::DeleteSelection),
+            'y' => self.state.execute(CopySelection),
+            'v' if !empty => { self.state.cursor = positions[end - 1]; }
+            _ => {}
+        }
+        true
     }
 }
 
@@ -306,13 +527,35 @@ fn generate_key_handler(is_single_line: bool, insert_mode_only: bool) -> KeyEven
     match text_input.mode {
         TextAreaMode::Vim => {
             let mut handler = KeyEventHandler::vim_mode();
+            // edtui's Vim preset omits these common change-to-end/whole-line commands.
+            let change_to_end = Composed::new(SwitchMode(EditorMode::Insert))
+                .chain(edtui::actions::delete::DeleteToEndOfLine)
+                .chain(MoveToEndOfLine());
+            let change_line = Composed::new(MoveToStartOfLine()).chain(change_to_end.clone());
+            handler.insert(KeyEventRegister::n(vec![KeyInput::shift('C')]), change_to_end.clone());
+            handler.insert(KeyEventRegister::n(vec![KeyInput::new('c'), KeyInput::new('$')]), change_to_end);
+            handler.insert(KeyEventRegister::n(vec![KeyInput::new('c'), KeyInput::new('c')]), change_line.clone());
+            handler.insert(KeyEventRegister::n(vec![KeyInput::shift('S')]), change_line);
+            handler.insert(KeyEventRegister::n(vec![KeyInput::new('d'), KeyInput::new('$')]), edtui::actions::delete::DeleteToEndOfLine);
+            handler.insert(KeyEventRegister::n(vec![KeyInput::new('^')]), edtui::actions::MoveToFirst());
+            handler.insert(KeyEventRegister::v(vec![KeyInput::new('^')]), edtui::actions::MoveToFirst());
+            handler.insert(KeyEventRegister::n(vec![KeyInput::new('s')]),
+                Composed::new(SwitchMode(EditorMode::Insert)).chain(edtui::actions::delete::DeleteCharForward(1)));
+
+            // Delimited objects are handled above, including nested pairs.
+            for operator in ['d', 'y'] {
+                let action = Composed::new(SwitchMode(EditorMode::Normal)).chain(edtui::actions::SelectInnerWord);
+                let action = if operator == 'd' { action.chain(edtui::actions::DeleteSelection) }
+                    else { action.chain(CopySelection) };
+                handler.insert(KeyEventRegister::n(vec![KeyInput::new(operator), KeyInput::new('i'), KeyInput::new('w')]), action.chain(SwitchMode(EditorMode::Normal)));
+            }
 
             if is_single_line {
                 // Remove new line
                 handler.remove(&KeyEventRegister::i(vec![KeyInput::new(KeyCode::Enter)]));
                 handler.remove(&KeyEventRegister::n(vec![KeyInput::new(KeyCode::Char('o'))]));
-                handler.remove(&KeyEventRegister::n(vec![KeyInput::new(KeyCode::Char('O'))]));
-                handler.remove(&KeyEventRegister::n(vec![KeyInput::new(KeyCode::Char('J'))]));
+                handler.remove(&KeyEventRegister::n(vec![KeyInput::shift('O')]));
+                handler.remove(&KeyEventRegister::n(vec![KeyInput::shift('J')]));
 
                 // External system editor
                 handler.remove(&KeyEventRegister::n(vec![KeyInput::ctrl(KeyCode::Char('e'))]));
@@ -434,14 +677,5 @@ fn generate_key_handler(is_single_line: bool, insert_mode_only: bool) -> KeyEven
 
             KeyEventHandler::new(keys, false)
         }
-    }
-}
-
-fn get_color_from_mode(mode: &EditorMode) -> Color {
-    match mode {
-        EditorMode::Normal => THEME.read().ui.secondary_foreground_color,
-        EditorMode::Insert => Color::Green,
-        EditorMode::Visual => Color::Yellow,
-        EditorMode::Search => Color::Magenta
     }
 }

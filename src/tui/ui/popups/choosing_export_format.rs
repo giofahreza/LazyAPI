@@ -1,19 +1,18 @@
+use crate::app::files::theme::THEME;
 use crate::app::app::App;
 use crate::tui::utils::centered_rect::centered_rect;
 use ratatui::Frame;
 use ratatui::layout::Direction::Horizontal;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::prelude::{Color, Style};
-use ratatui::style::Color::Yellow;
-use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::prelude::Style;
+use ratatui::widgets::{Borders, Clear, Paragraph};
 
 impl App<'_> {
     pub fn render_export_format_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Choose request export format")
             .borders(Borders::ALL)
-            .style(Style::default().bg(Color::DarkGray));
+            .style(Style::default().bg(THEME.read().ui.main_background_color));
 
 
         let nb_elements = self.export_request.choices.len() as u16;
@@ -42,7 +41,7 @@ impl App<'_> {
             let mut paragraph = Paragraph::new(element.to_string()).centered();
 
             if index == self.export_request.selection {
-                paragraph = paragraph.fg(Yellow).bold();
+                paragraph = paragraph.style(THEME.read().active_cell());
             }
 
             frame.render_widget(paragraph, creating_element_layout[index]);

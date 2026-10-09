@@ -8,6 +8,26 @@ use crate::models::protocol::ws::message_type::{next_message_type, MessageType};
 use crate::models::protocol::ws::ws::{Message, Sender};
 
 impl App<'_> {
+    /// Saving a message draft must never send it to a server.
+    pub fn tui_store_request_message(&mut self) {
+        let (collection, _) = self.collections_tree.selected.unwrap();
+        let local_request = self.get_selected_request_as_local();
+        {
+            let mut request = local_request.write();
+            let ws = request.get_ws_request_mut().unwrap();
+            let text = self.message_text_area.to_string();
+            ws.message_type = match ws.message_type {
+                MessageType::Text(_) => MessageType::Text(text),
+                MessageType::Close(_) => MessageType::Close(text),
+                MessageType::Binary(_) => MessageType::Binary(text.into_bytes().into_boxed_slice()),
+                MessageType::Ping(_) => MessageType::Ping(text.into_bytes().into_boxed_slice()),
+                MessageType::Pong(_) => MessageType::Pong(text.into_bytes().into_boxed_slice()),
+            };
+        }
+        self.save_collection_to_file(collection);
+        self.select_request_state();
+    }
+
     pub async fn tui_send_request_message(&mut self) {
         let selected_request_index = &self.collections_tree.selected.unwrap();
         let local_selected_request = self.get_request_as_local_from_indexes(selected_request_index);
@@ -51,7 +71,7 @@ impl App<'_> {
 
                     info!("Message sent");
 
-                    *self.received_response.lock() = true;
+                    crate::models::response_updates::notify_response(&self.received_response, &local_selected_request);
                 }
             }
             else {

@@ -1,5 +1,5 @@
 use ratatui::prelude::Stylize;
-use ratatui::widgets::{Block, Borders, Clear};
+use ratatui::widgets::{Borders, Clear};
 use ratatui::Frame;
 
 use crate::app::app::App;
@@ -9,10 +9,10 @@ use crate::tui::utils::stateful::text_input::SingleLineTextInput;
 
 impl App<'_> {
     pub fn render_renaming_collection_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Enter the new collection name")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color)
+
             .bg(THEME.read().ui.main_background_color);
 
 
@@ -23,7 +23,7 @@ impl App<'_> {
         frame.render_widget(popup_block, area);
 
         self.rename_collection_input.display_cursor = true;
-       
+
         frame.render_widget(SingleLineTextInput(&mut self.rename_collection_input), renaming_collection_area);
     }
 }

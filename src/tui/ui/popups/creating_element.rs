@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Direction::Horizontal;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Borders, Clear, Paragraph};
 
 use crate::app::app::App;
 use crate::app::files::theme::THEME;
@@ -10,10 +10,10 @@ use crate::tui::utils::centered_rect::centered_rect;
 
 impl App<'_> {
     pub fn render_creating_element_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Choose element to create")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color)
+
             .bg(THEME.read().ui.main_background_color);
 
 
@@ -43,7 +43,7 @@ impl App<'_> {
             let mut paragraph = Paragraph::new(element.clone()).centered().fg(THEME.read().ui.font_color);
 
             if index == self.creation_popup.selection {
-                paragraph = paragraph.fg(THEME.read().others.selection_highlight_color).bold();
+                paragraph = paragraph.style(THEME.read().active_cell());
             }
 
             frame.render_widget(paragraph, creating_element_layout[index]);

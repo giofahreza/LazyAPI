@@ -4,7 +4,7 @@ use crate::tui::app_states::AppState::{SelectedRequest, EditingRequestAuthDigest
 use ratatui::layout::Direction::Vertical;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::prelude::{Position, Size, StatefulWidget, Stylize};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Borders, Paragraph};
 use ratatui::Frame;
 use tui_scrollview::{ScrollView, ScrollViewState};
 use crate::tui::utils::stateful::text_input::SingleLineTextInput;
@@ -41,30 +41,30 @@ impl App<'_> {
             selected_request.auth.get_digest().clone()
         };
 
-        let mut stale_block = Block::new()
+        let mut stale_block = THEME.read().panel("", false)
             .title("Stale ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
-        let mut algorithm_block = Block::new()
+        let mut algorithm_block = THEME.read().panel("", false)
             .title("Algorithm ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
-        let mut qop_block = Block::new()
+        let mut qop_block = THEME.read().panel("", false)
             .title("QOP ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
-        let mut user_hash_block = Block::new()
+        let mut user_hash_block = THEME.read().panel("", false)
             .title("User hash ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
-        let mut charset_block = Block::new()
+        let mut charset_block = THEME.read().panel("", false)
             .title("Charset ← →")
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color);
+            ;
 
 
         let mut should_color_blocks = false;
@@ -135,22 +135,22 @@ impl App<'_> {
             },
             6 if should_color_blocks => {
                 stale_paragraph = stale_paragraph.fg(THEME.read().others.selection_highlight_color);
-                stale_block = stale_block.fg(THEME.read().others.selection_highlight_color);
+                stale_block = stale_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
             },
             7 if should_color_blocks => {
-                algorithm_block = algorithm_block.fg(THEME.read().others.selection_highlight_color);
+                algorithm_block = algorithm_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
                 algorithm_paragraph = algorithm_paragraph.fg(THEME.read().others.selection_highlight_color);
             },
             8 if should_color_blocks => {
-                qop_block = qop_block.fg(THEME.read().others.selection_highlight_color);
+                qop_block = qop_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
                 qop_paragraph = qop_paragraph.fg(THEME.read().others.selection_highlight_color);
             },
             9 if should_color_blocks => {
-                user_hash_block = user_hash_block.fg(THEME.read().others.selection_highlight_color);
+                user_hash_block = user_hash_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
                 user_hash_paragraph = user_hash_paragraph.fg(THEME.read().others.selection_highlight_color);
             },
             10 if should_color_blocks => {
-                charset_block = charset_block.fg(THEME.read().others.selection_highlight_color);
+                charset_block = charset_block.border_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color)).title_style(ratatui::style::Style::new().fg(THEME.read().others.selection_highlight_color));
                 charset_paragraph = charset_paragraph.fg(THEME.read().others.selection_highlight_color);
             },
             _ => {}

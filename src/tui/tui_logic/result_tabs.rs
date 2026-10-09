@@ -18,9 +18,6 @@ impl App<'_> {
             RequestResultTabs::Messages => RequestResultTabs::Cookies,
             RequestResultTabs::Cookies => RequestResultTabs::Headers,
             RequestResultTabs::Headers => {
-                let local_selected_request = self.get_selected_request_as_local();
-                let selected_request = local_selected_request.read();
-
                 match (&selected_request.console_output.pre_request_output, &selected_request.console_output.post_request_output) {
                     (None, None) => match selected_request.protocol {
                         Protocol::HttpRequest(_) => RequestResultTabs::Body,
@@ -35,7 +32,8 @@ impl App<'_> {
             }
         };
 
-        *self.received_response.lock() = true;
+        drop(selected_request);
+        self.refresh_active_response();
     }
 
     pub fn tui_update_request_result_tab(&mut self) {
@@ -59,7 +57,7 @@ impl App<'_> {
 
     pub fn tui_highlight_response_body_and_console(&mut self) {
         let local_selected_request = self.get_selected_request_as_local();
-        let selected_request = local_selected_request.write();
+        let selected_request = local_selected_request.read();
 
         self.syntax_highlighting.highlighted_body = None;
         self.syntax_highlighting.highlighted_console_output = vec![];
@@ -108,7 +106,7 @@ impl App<'_> {
                     },
                     Some(content) => match content {
                         ResponseContent::Body(body) => {
-                            vertical_max = body.lines().count() as u16;
+                            vertical_max = body.lines().count().saturating_sub(1).min(u16::MAX as usize) as u16;
                             horizontal_max = App::get_max_str_len(body.lines()) as u16;
                         }
                         ResponseContent::Image(_) => {
@@ -138,13 +136,13 @@ impl App<'_> {
                         horizontal_max = 0;
                     },
                     Some(cookies) => {
-                        vertical_max = cookies.lines().count() as u16;
+                        vertical_max = cookies.lines().count().saturating_sub(1).min(u16::MAX as usize) as u16;
                         horizontal_max = App::get_max_str_len(cookies.lines()) as u16;
                     }
                 }
             },
             RequestResultTabs::Headers => {
-                vertical_max = selected_request.response.headers.len()  as u16;
+                vertical_max = selected_request.response.headers.len().saturating_sub(1).min(u16::MAX as usize) as u16;
 
                 let mut max_tmp: u16 = 0;
 
@@ -171,7 +169,7 @@ impl App<'_> {
                         horizontal_max = 0;
                     },
                     Some(console_output) => {
-                        vertical_max = console_output.lines().count() as u16;
+                        vertical_max = console_output.lines().count().saturating_sub(1).min(u16::MAX as usize) as u16;
                         horizontal_max = App::get_max_str_len(console_output.lines()) as u16;
                     }
                 }

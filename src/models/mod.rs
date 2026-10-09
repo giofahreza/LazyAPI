@@ -8,3 +8,5 @@ pub mod scripts;
 pub mod export;
 pub mod protocol;
 pub(super) mod legacy;
+
+pub mod response_updates;

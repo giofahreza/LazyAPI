@@ -1,9 +1,9 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::layout::Direction::{Horizontal, Vertical};
-use ratatui::prelude::{Line, Modifier, Style};
+use ratatui::prelude::{Line, Style};
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+use ratatui::widgets::{Borders, Clear, List, ListItem, Paragraph};
 
 use crate::app::app::App;
 use crate::app::files::theme::THEME;
@@ -12,7 +12,7 @@ use crate::tui::utils::stateful::cookie_table::{CookieColumns, COOKIES_COLUMNS_N
 
 impl App<'_> {
     pub fn render_cookies_popup(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title("Cookies")
             .borders(Borders::ALL)
             .fg(THEME.read().ui.font_color)
@@ -56,8 +56,8 @@ impl App<'_> {
         for (index, header_name) in header_names.iter().enumerate() {
             let paragraph = Paragraph::new(header_name.as_str())
                 .centered()
-                .block(Block::new().borders(Borders::BOTTOM | Borders::RIGHT))
-                .fg(THEME.read().ui.font_color);
+                .block(THEME.read().panel("", false).borders(Borders::BOTTOM | Borders::RIGHT).border_style(Style::new().fg(THEME.read().palette.grid_border)))
+                .fg(THEME.read().palette.grid_header_text).bg(THEME.read().palette.grid_header).bold();
 
             frame.render_widget(paragraph, inner_cookies_layout[index]);
         }
@@ -119,7 +119,7 @@ impl App<'_> {
             Style::default()
         ];
 
-        list_styles[selection.1] = list_styles[selection.1].fg(THEME.read().others.selection_highlight_color).add_modifier(Modifier::BOLD);
+        list_styles[selection.1] = THEME.read().active_cell();
 
         for (index, cookie) in cookies.iter().enumerate() {
             let list = List::new(cookie.clone()).highlight_style(list_styles[index]);

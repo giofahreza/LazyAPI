@@ -16,11 +16,4 @@ impl StatefulTree<'_> {
         self.state.key_down();
     }
 
-    pub fn set_selected(&mut self) {
-        self.selected = Some((self.state.selected()[0], self.state.selected()[1]));
-    }
-
-    pub fn set_unselected(&mut self) {
-        self.selected = None;
-    }
 }

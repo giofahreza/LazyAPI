@@ -21,6 +21,8 @@ impl App<'_> {
         self.url_text_input.push_str(&selected_request.url_with_params_to_string());
         self.query_params_table.rows = selected_request.params.clone();
         self.headers_table.rows = selected_request.headers.clone();
+        self.query_params_table.clamp_selection();
+        self.headers_table.clamp_selection();
 
         if !selected_request.params.is_empty() {
             let selection = self.query_params_table.selection.unwrap();
@@ -72,6 +74,8 @@ impl App<'_> {
             }
         }
 
+        self.auth_text_input_selection.selected = self.auth_text_input_selection.selected.min(self.auth_text_input_selection.max_selection.saturating_sub(1));
+
         if !selected_request.headers.is_empty() {
             let selection = self.headers_table.selection.unwrap();
 
@@ -92,6 +96,7 @@ impl App<'_> {
                 }
                 ContentType::Multipart(form) | ContentType::Form(form) => {
                     self.body_form_table.rows = form.clone();
+                    self.body_form_table.clamp_selection();
 
                     if !form.is_empty() {
                         let selection = self.body_form_table.selection.unwrap();
@@ -108,6 +113,7 @@ impl App<'_> {
                     self.body_text_area.clear();
                 }
                 ContentType::File(file_path) => {
+                    self.body_form_table.rows.clear();
                     self.body_file_text_input.push_str(file_path);
                 }
                 ContentType::Raw(body) | ContentType::Json(body) | ContentType::Xml(body) | ContentType::Html(body) | ContentType::Javascript(body) => {
@@ -126,6 +132,8 @@ impl App<'_> {
             }
         }
 
+        self.body_form_table.clamp_selection();
+
         let pre_request_script = match &selected_request.scripts.pre_request_script {
             None => "",
             Some(pre_request_script) => &pre_request_script
@@ -141,32 +149,14 @@ impl App<'_> {
     }
 
     pub fn select_request(&mut self) {
-        if self.collections_tree.state.selected().len() == 2 {
-            self.collections_tree.set_selected();
-            self.tui_update_request_param_tab();
-            self.tui_update_request_result_tab();
-            self.tui_update_query_params_selection();
-            self.tui_update_headers_selection();
-
-            let local_selected_request = self.get_selected_request_as_local();
-            let selected_request = local_selected_request.read();
-
-            match selected_request.protocol {
-                Protocol::HttpRequest(_) => {
-                    self.tui_update_body_table_selection();
-                }
-                Protocol::WsRequest(_) => {}
-            }
-
-            *self.received_response.lock() = true;
-            self.select_request_state();
+        let selection = self.collections_tree.state.selected();
+        if selection.len() == 2 {
+            self.open_request_tab(self.collections[selection[0]].requests[selection[1]].clone());
         }
     }
 
     pub fn unselect_request(&mut self) {
-        self.collections_tree.state.select(Vec::new());
-        self.collections_tree.set_unselected();
-        self.normal_state()
+        self.collections_tree.state.key_left();
     }
 
     pub fn select_request_or_expand_collection(&mut self) {

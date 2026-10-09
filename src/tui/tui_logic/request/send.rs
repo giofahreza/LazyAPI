@@ -85,12 +85,14 @@ impl App<'_> {
 
                     selected_request.response = response;
 
-                    *local_should_refresh_scrollbars.lock() = true;
+                    crate::models::response_updates::notify_response(&local_should_refresh_scrollbars, &local_selected_request);
                     return;
                 },
                 Err(response_error) => {
                     let mut selected_request = local_selected_request.write();
                     selected_request.response.status_code = Some(response_error.to_string());
+                    selected_request.is_pending = false;
+                    crate::models::response_updates::notify_response(&local_should_refresh_scrollbars, &local_selected_request);
                     return;
                 }
             };

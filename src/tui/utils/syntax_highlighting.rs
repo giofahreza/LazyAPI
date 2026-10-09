@@ -4,8 +4,8 @@ use ratatui::prelude::Color;
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{Theme, ThemeSet};
-use syntect::parsing::{SyntaxDefinition, SyntaxReference, SyntaxSet, SyntaxSetBuilder};
+use syntect::highlighting::{Theme, ThemeItem, StyleModifier};
+use syntect::parsing::{SyntaxReference, SyntaxSet};
 
 #[derive(Default)]
 pub struct SyntaxHighlighting {
@@ -15,23 +15,40 @@ pub struct SyntaxHighlighting {
 
 lazy_static! {
     pub static ref SYNTAX_SET: Arc<SyntaxSet> = Arc::new(SyntaxSet::load_defaults_newlines());
-    pub static ref ENV_VARIABLE_SYNTAX_SET: Arc<SyntaxSet> = Arc::new(generate_env_variable_syntax_set());
-
-    pub static ref ENV_VARIABLE_SYNTAX_REF: &'static SyntaxReference = ENV_VARIABLE_SYNTAX_SET.syntaxes().first().unwrap();
     pub static ref JSON_SYNTAX_REF: &'static SyntaxReference = SYNTAX_SET.find_syntax_by_extension("json").unwrap();
     pub static ref XML_SYNTAX_REF: &'static SyntaxReference = SYNTAX_SET.find_syntax_by_extension("xml").unwrap();
     pub static ref HTML_SYNTAX_REF: &'static SyntaxReference = SYNTAX_SET.find_syntax_by_extension("html").unwrap();
     pub static ref JS_SYNTAX_REF: &'static SyntaxReference = SYNTAX_SET.find_syntax_by_extension("js").unwrap();
 
-    pub static ref THEME_SET: Arc<ThemeSet> = Arc::new(ThemeSet::load_defaults());
-    pub static ref SYNTAX_THEME: &'static Theme = &THEME_SET.themes["base16-ocean.dark"];
+}
+
+fn syntax_theme() -> Theme {
+    let ui = crate::app::files::theme::THEME.read();
+    let color = |color: Color| match color {
+        Color::Rgb(r, g, b) => syntect::highlighting::Color { r, g, b, a: 255 },
+        _ => syntect::highlighting::Color::WHITE,
+    };
+    let mut theme = Theme::default();
+    theme.settings.foreground = Some(color(ui.ui.font_color));
+    theme.scopes = [
+        ("comment", ui.palette.muted),
+        ("keyword, storage, support.type", ui.palette.accent),
+        ("string", ui.palette.success),
+        ("constant.numeric, constant.language, variable.parameter", ui.palette.action),
+        ("entity.name.function, support.function", Color::Rgb(130, 170, 255)),
+        ("invalid", ui.palette.error),
+    ].into_iter().map(|(scope, foreground)| ThemeItem {
+        scope: scope.parse().unwrap(),
+        style: StyleModifier { foreground: Some(color(foreground)), ..StyleModifier::default() },
+    }).collect();
+    theme
 }
 
 pub fn highlight(string: &str, extension: &str) -> Option<Vec<Line<'static>>> {
     let syntax = match extension {
         "json" => &*JSON_SYNTAX_REF,
-        "xml" => &*HTML_SYNTAX_REF,
-        "html" => &*XML_SYNTAX_REF,
+        "xml" => &*XML_SYNTAX_REF,
+        "html" => &*HTML_SYNTAX_REF,
         "js" => &*JS_SYNTAX_REF,
         _ => match SYNTAX_SET.find_syntax_by_extension(&extension) {
             None => return None,
@@ -39,7 +56,8 @@ pub fn highlight(string: &str, extension: &str) -> Option<Vec<Line<'static>>> {
         }
     };
 
-    let mut highlight = HighlightLines::new(syntax, &SYNTAX_THEME);
+    let theme = syntax_theme();
+    let mut highlight = HighlightLines::new(syntax, &theme);
 
     let mut lines: Vec<Line> = vec![];
 
@@ -57,29 +75,4 @@ pub fn highlight(string: &str, extension: &str) -> Option<Vec<Line<'static>>> {
     }
 
     return Some(lines);
-}
-
-fn generate_env_variable_syntax_set() -> SyntaxSet {
-    let mut syntax_set_builder = SyntaxSetBuilder::new();
-
-    let syntax_def = SyntaxDefinition::load_from_str(
-        r#"%YAML 1.2
----
-name: Double Brace Variables
-file_extensions:
-  - dblvars
-scope: source.dblvars
-
-contexts:
-  main:
-    - match: '\{\{[A-Za-z0-9_-]+\}\}'
-      scope: variable"#,
-        true,
-        None
-    )
-        .unwrap();
-
-    syntax_set_builder.add(syntax_def);
-
-    syntax_set_builder.build()
 }

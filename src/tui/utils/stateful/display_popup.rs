@@ -5,7 +5,7 @@ use ratatui::layout::Direction::Vertical;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::prelude::{Line, Style};
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::Frame;
 
 #[derive(Default)]
@@ -19,10 +19,10 @@ pub struct DisplayPopup {
 
 impl DisplayPopup {
     pub fn render(&mut self, frame: &mut Frame) {
-        let popup_block = Block::default()
+        let popup_block = THEME.read().panel("", true)
             .title(format!("{} export", self.title))
             .borders(Borders::ALL)
-            .fg(THEME.read().ui.main_foreground_color)
+
             .bg(THEME.read().ui.secondary_background_color);
 
         let area = centered_rect(100, 25, frame.area());
