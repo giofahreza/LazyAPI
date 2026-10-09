@@ -317,7 +317,7 @@
 						{
 							"key": "some_file",
 							"type": "file",
-							"src": "/C:/Users/u248244/Documents/Rust/ATAC/LICENSE"
+							"src": "LICENSE"
 						}
 					]
 				},
@@ -378,7 +378,7 @@
 				"body": {
 					"mode": "file",
 					"file": {
-						"src": "/C:/Users/u248244/Documents/Rust/ATAC/import_tests/swagger-petstore-v2.1.0.json"
+						"src": "example_resources/import/swagger-petstore-v2.1.0.json"
 					}
 				},
 				"url": {

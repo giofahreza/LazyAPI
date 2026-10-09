@@ -1,109 +1,78 @@
-# Please avoid using Ctrl-v, it will paste your clipboard and trigger many unwanted event
+# LazyAPI's default Neovim-style workspace. All bindings below are configurable.
+[keybindings.workspace]
+focus_left = "Ctrl-h"
+focus_down = "Ctrl-j"
+focus_up = "Ctrl-k"
+focus_right = "Ctrl-l"
+previous_request = "["
+next_request = "]"
+close_request = "Shift-X"
+previous_panel = "Shift-BackTab"
+page_up = "Ctrl-u"
+page_down = "Ctrl-d"
 
 [keybindings.main_menu]
-exit = "q" # ctrl-c is implemented by default
-
-unselect_request = "Left"
-expand_collection = "Right"
-
-move_request_up = "Ctrl-Up"
-move_request_down = "Ctrl-Down"
-
+exit = "q"
+expand_collection = "l"
+unselect_request = "h"
+move_request_up = "Shift-K"
+move_request_down = "Shift-J"
 next_environment = "e"
 display_env_editor = "Ctrl-e"
 display_cookies = "c"
-display_logs = "l"
+display_logs = "Shift-L"
 
 [keybindings.generic]
-display_help = "Ctrl-h" # Take care to not overlap other inputs, the help can be triggered from anywhere
+display_help = "?"
 
-# E.g. Collection name, request name, URL, Header, Query param, Basic Auth, Bearer Token, Request body
 [keybindings.generic.text_input]
-quit_without_saving = "Esc"
+# Vim: Esc/Ctrl+[ keeps the editor open in Normal; Enter on a value opens Normal.
+# i/a/I/A enters Insert. :w saves; :wq finishes; :q! discards. F1 opens help.
+quit_without_saving = "Ctrl-c"
 save_and_quit_single_line = "Enter"
 save_and_quit_area = "Ctrl-s"
+mode = "vim"
 
-# The following line is a shortcut of the next section (modes: vim, emacs, default, custom)
-#mode = "default"
-
-[keybindings.generic.text_input.mode.custom]
-copy = "Ctrl-c"
-paste = "Ctrl-v"
-
-search = "Ctrl-f"
-system_editor = "Ctrl-e"
-
-undo = "Ctrl-z"
-redo = "Ctrl-y"
-
-new_line = "Enter"
-indent = "Tab"
-
-delete_backward = "Delete"
-delete_forward = "Backspace"
-
-skip_word_right = "Ctrl-Right"
-skip_word_left = "Ctrl-Left"
-
-move_cursor_up = "Up"
-move_cursor_down = "Down"
-move_cursor_left = "Left"
-move_cursor_right = "Right"
-
-move_cursor_line_start = "Home"
-move_cursor_line_end = "End"
-
-# Navigation in tables, popups, up and down in the collections list
 [keybindings.generic.navigation]
-move_cursor_up = "Up"
-move_cursor_down = "Down"
-move_cursor_left = "Left"
-move_cursor_right = "Right"
-
-# Avoids overlapping when in text input (e.g. selecting a collection while creating a new request)
-# Might not happen when using the default config
+move_cursor_up = "k"
+move_cursor_down = "j"
+move_cursor_left = "h"
+move_cursor_right = "l"
 alt_move_cursor_up = "Up"
 alt_move_cursor_down = "Down"
 alt_move_cursor_left = "Left"
 alt_move_cursor_right = "Right"
-
 go_back = "Esc"
 select = "Enter"
 
-# Collections list, query params, headers, cookies
 [keybindings.generic.list_and_table_actions]
-create_element = "n"
+create_element = "a"
 delete_element = "d"
-edit_element = "Enter" # Edit query param, header, basic auth, bearer token
-rename_element = "r" # Only used in the collections list (main menu)
-toggle_element = "t" # Only used in tables (Query params, headers, cookies)
-duplicate_element = "Ctrl-d"
+edit_element = "i"
+rename_element = "r"
+toggle_element = "t"
+duplicate_element = "Shift-Y"
 
 [keybindings.request_selected]
 param_next_tab = "Tab"
-
 change_url = "u"
 change_method = "m"
 request_settings = "s"
-
+export_request = "Shift-E"
 next_view = "v"
-
 send_request = "Space"
 alt_send_request = "Ctrl-Enter"
-
-export_request = "Shift-E"
 
 [keybindings.request_selected.param_tabs]
 change_auth_method = "Ctrl-a"
 change_body_content_type = "Ctrl-b"
-change_message_type = "Ctrl-m"
+change_message_type = "Ctrl-t"
 
 [keybindings.request_selected.result_tabs]
-scroll_up = "Ctrl-Up"
-scroll_down = "Ctrl-Down"
-scroll_left = "Ctrl-Left"
-scroll_right = "Ctrl-Right"
-
-yank_response_part = "y" # Used to yank the current result tab (e.g. body, headers, cookies)
-
-result_next_tab = "Shift-BackTab" # Will use param_next_tab depending on the selected view
+scroll_up = "k"
+scroll_down = "j"
+scroll_left = "h"
+scroll_right = "l"
+yank_response_part = "y"
+# Legacy alias; Tab / Shift+Tab navigate the focused pane's panels.
+result_next_tab = "Shift-BackTab"

@@ -20,9 +20,13 @@ RUN case "$TARGETPLATFORM" in \
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --target $(cat rust_target.txt) --recipe-path recipe.json --zigbuild
 COPY . .
-RUN cargo zigbuild --release --target $(cat rust_target.txt) --bin atac && cp /app/target/$(cat rust_target.txt)/release/atac /atac
+RUN cargo zigbuild --release --locked --target $(cat rust_target.txt) --bin lazyapi && cp /app/target/$(cat rust_target.txt)/release/lazyapi /lazyapi
 
 FROM alpine:3.20 AS runtime
-COPY --from=builder /atac /atac
+LABEL org.opencontainers.image.title="LazyAPI" \
+      org.opencontainers.image.source="https://github.com/giofahreza/LazyAPI" \
+      org.opencontainers.image.licenses="MIT"
+COPY --from=builder /lazyapi /lazyapi
+COPY --from=builder /app/LICENSE /usr/share/licenses/lazyapi/LICENSE
 WORKDIR /app
-ENTRYPOINT [ "/atac" ]
+ENTRYPOINT [ "/lazyapi" ]

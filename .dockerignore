@@ -10,8 +10,7 @@ Dockerfile
 
 /.github
 /example_resources
-/gifs
+/docs
 /import-tests
 /.typos.toml
-LICENSE
 README.md

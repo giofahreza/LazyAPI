@@ -18,7 +18,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.12.0"
+            "LazyAPI/v0.12.0"
           ]
         },
         {
@@ -79,7 +79,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.7.0"
+            "LazyAPI/v0.7.0"
           ]
         },
         {
@@ -148,7 +148,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.8.1"
+            "LazyAPI/v0.8.1"
           ]
         },
         {
@@ -209,7 +209,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.7.0"
+            "LazyAPI/v0.7.0"
           ]
         },
         {
@@ -299,7 +299,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.14.0"
+            "LazyAPI/v0.14.0"
           ]
         },
         {
@@ -360,7 +360,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.7.0"
+            "LazyAPI/v0.7.0"
           ]
         },
         {
@@ -421,7 +421,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.7.0"
+            "LazyAPI/v0.7.0"
           ]
         },
         {
@@ -482,7 +482,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.11.3"
+            "LazyAPI/v0.11.3"
           ]
         },
         {
@@ -560,7 +560,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.19.0"
+            "LazyAPI/v0.19.0"
           ]
         },
         {
@@ -621,7 +621,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.20.2"
+            "LazyAPI/v0.20.2"
           ]
         },
         {

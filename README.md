@@ -1,391 +1,204 @@
-ATAC ⚔📩
-===
+# LazyAPI
 
-[![Rust](https://github.com/Julien-cpsn/ATAC/actions/workflows/rust.yml/badge.svg)](https://github.com/Julien-cpsn/ATAC/actions/workflows/rust.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![GitHub Release](https://img.shields.io/github/v/release/julien-cpsn/ATAC?link=https%3A%2F%2Fgithub.com%2FJulien-cpsn%2FATAC%2Freleases%2Flatest)
+[![Rust](https://github.com/giofahreza/LazyAPI/actions/workflows/rust.yml/badge.svg)](https://github.com/giofahreza/LazyAPI/actions/workflows/rust.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Demo Animation](gifs/demo.gif)
+LazyAPI is a terminal API client for HTTP and WebSocket requests. Manage requests,
+collections, environments, and scripts locally, without an account or cloud sync.
 
-## Table Of Contents
+![LazyAPI terminal interface](docs/lazyapi.svg)
 
-- [Description](#description)
-- [How to install](#how-to-install)
-  * [Install with cargo](#install-with-cargo)
-  * [Install with Homebrew](#install-with-homebrew)
-  * [Install with Scoop](#install-with-scoop)
-  * [Install from Arch](#install-from-arch)
-  * [Install from Fedora copr](#install-from-fedora-copr)
-  * [Docker package](#docker-package)
-  * [Binary](#binary)
-  * [Compile by yourself](#compile-by-yourself)
-- [Features](#features)
-  * [Current](#current)
-  * [TODO v1.0.0](#todo-v100)
-  * [TODO v2.0.0](#todo-v200)
-- [Documentation](#documentation)
-- [Others](#others)
-  * [Vim key-bindings](#vim-key-bindings)
-  * [NeoVim integration](#neovim-integration)
-  * [Themes](#themes)
-- [Technical precisions](#technical-precisions)
-  * [Tested on](#tested-on)
-  * [Dependencies](#dependencies)
-  * [Binary size](#binary-size)
-- [Contributors](#contributors)
-  * [Maintainers](#maintainers)
-  * [Packagers](#packagers)
-- [Star history](#star-history)
-- [License](#license)
+## Install from this checkout
 
-## Description
+Requirements: Rust 1.90 or newer, Cargo, Python 3, and a C/C++ build toolchain.
 
-ATAC is **A**rguably a **T**erminal **A**PI **C**lient.
-It is based on well-known clients such as Postman, Insomnia, or even Bruno,
-but inside your terminal without any specific graphical environment needed.
-
-The philosophy of ATAC is to be free, account-less, and offline for now and forever.
-
-## How to install
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/atac.svg)](https://repology.org/project/atac/versions)
-
-<a href="https://crates.io/crates/atac">
-  <img src="https://repology.org/badge/version-for-repo/crates_io/atac.svg" alt="crates.io package" align="right">
-</a>
-
-### Install with cargo
-
-> [!IMPORTANT]
-> First, make sure your rust version is at least 1.82
-
-Simply use:
-
-```shell
-cargo install atac --locked
+```sh
+git clone https://github.com/giofahreza/LazyAPI.git
+cd LazyAPI
+python3 scripts/install-local.py
+lazyapi
 ```
 
-<a href="https://archlinux.org/packages/extra/x86_64/atac/">
-  <img src="https://repology.org/badge/version-for-repo/arch/atac.svg" alt="Arch package" align="right">
-</a>
+The installer builds the release binary with the locked dependencies and installs
+it to `~/.local/bin/lazyapi`. Add `~/.local/bin` to your `PATH` if necessary.
+It also installs shell completions, the manual page, and the license. The previous
+executable is kept under `$XDG_STATE_HOME/lazyapi/previous/`, which defaults to
+`~/.local/state/lazyapi/previous/`. Collections and environments are left intact.
+Restart an open app to use the new build.
 
-### Install from Arch
+After every change to this checkout, run the relevant checks and reinstall:
 
-You can use [pacman](https://wiki.archlinux.org/title/pacman) to install:
-
-```shell
-pacman -S atac
+```sh
+cargo build --release --locked --bin lazyapi
+LAZYAPI_BIN=target/release/lazyapi python3 -m unittest discover -s tests -v
+python3 scripts/install-local.py
 ```
 
-<a href="https://formulae.brew.sh/formula/atac">
-  <img src="https://repology.org/badge/version-for-repo/homebrew/atac.svg" alt="Homebrew package" align="right">
-</a>
+For a standard Cargo installation on other machines:
 
-### Install with Homebrew
-
-Simply use:
-
-```bash
-brew install atac
+```sh
+cargo install --path . --locked --force
 ```
 
-<a href="https://github.com/ScoopInstaller/Main/blob/master/bucket/atac.json">
-  <img src="https://repology.org/badge/version-for-repo/scoop/atac.svg" alt="Scoop package" align="right">
-</a>
+## Usage
 
-### Install with Scoop
-
-Simply use:
-
-```bash
-scoop install atac
+```sh
+lazyapi                                      # Open the terminal UI
+lazyapi --help                               # Show commands and options
+lazyapi --version                            # Show the installed version
+lazyapi --dry-run collection list            # Inspect saved collections
+lazyapi --directory ./collections            # Use a specific collection folder
+lazyapi --dry-run --directory ./collections  # Browse without saving changes
 ```
 
-<a href="https://copr.fedorainfracloud.org/coprs/joxcat/atac/">
-  <img alt="Fedora copr Release" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcopr.fedorainfracloud.org%2Fapi_3%2Fpackage%3Fownername%3Djoxcat%26projectname%3Datac%26packagename%3Datac%26with_latest_build%3DTrue&query=%24.builds.latest.source_package.version&style=flat&logo=fedora&logoColor=white&label=Fedora%20copr&color=limegreen" align="right">
-</a>
+Create a collection and a request from the CLI:
 
-### Install from Fedora copr
-
-Simply use:
-
-```bash
-dnf copr enable joxcat/atac
-dnf install atac
+```sh
+lazyapi collection new Example
+lazyapi request new Example/Get --url https://example.com
+lazyapi request info Example/Get
 ```
 
-<a href="https://hub.docker.com/r/juliencaposiena/atac">
- <img alt="Docker Image Version" src="https://img.shields.io/docker/v/juliencaposiena/atac?logo=docker" align="right">
-</a>
+Use `lazyapi <command> --help` for command-specific options. Requests are sent only
+when you ask the app to send them. Press `?` in Normal mode for keyboard shortcuts,
+and `q` to quit from the workspace.
 
-### Docker package
+The default controls follow Neovim and LazyDB: `h/j/k/l` navigate within a pane,
+`Ctrl+h/j/k/l` change pane, and `[` / `]` switch open request tabs. Open requests
+with Enter in Collections; close a tab with `X`. Press `a` in Collections to add
+a collection or request, or in a table to add a row. Press `d` to delete the
+selected item; collections and requests ask for confirmation. On a value, Enter opens the
+editor in Normal mode; inside it, `i/a/I/A` insert or append. Esc keeps your draft and returns
+to Normal. Use `:w` to save and keep editing, `:wq` or Ctrl+s to save and finish,
+and `:q!` or Ctrl+c to discard. The footer names the field and marks unsaved edits
+with `[+]`. `Ctrl+w h/j/k/l` also changes panes. Pane/tab navigation saves the
+current field; Tab / Shift+Tab switch panels in Normal mode. `?` opens help in
+Normal mode, and F1 works while typing. See the [keyboard reference](docs/keybindings.md).
 
-Pull the image from https://hub.docker.com/r/juliencaposiena/atac
+Press `/` to search the focused list or view, including Collections, environments,
+variables, keyboard shortcuts, parameter/header/form tables, cookies, responses,
+logs, and request exports. Type to filter, use arrows or `Ctrl+n/p` to select,
+and Enter to jump to a match. Use `n` / `N` for the next / previous match;
+Esc cancels the search dialog or clears an accepted search. In Collections,
+search also finds requests inside collapsed collections by name, method, or URL.
+Enter again opens the selected request. Inside an editor, `/` uses Vim search.
 
-<a href="https://github.com/Julien-cpsn/ATAC/releases">
-  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/julien-cpsn/atac?label=Release&color=45c017" align="right">
-</a>
+Text bodies and WebSocket messages open directly in Normal mode with a visible
+cursor; typing updates the displayed draft immediately. The interface uses
+LazyDB's Deep Space colors, rounded panels, compact request tabs, and underlined
+section tabs. Branding, mode, and solid-white shortcut hints share one bottom
+row. Tabs scroll to keep the active request visible. Below 100 columns, the
+focused pane fills the workspace; `Ctrl+h/j/k/l` still changes panes.
 
-### Binary
+Press `Ctrl+e` for the environment manager. Use `Ctrl+h/l` or Tab to switch
+between the environment list and its variable table. In the list, `a` creates,
+`r` renames, and `d` deletes an environment with confirmation. Enter activates
+the selected environment. In the table, `a` adds a variable, `Enter` or `i`
+opens a cell, and `d` deletes a variable. `N` creates an environment from either
+pane. Use variables as `{{BASE_URL}}` or `{{API_TOKEN}}` in requests.
 
-The binaries from the latest release can be found [here](https://github.com/Julien-cpsn/ATAC/releases/latest)
+The CLI also supports environment management:
 
-> [!IMPORTANT]
-> Remember to run it from a terminal.
-> For example, you can add the binary into your PATH.
-> You won't be able to run it like other graphical applications since it needs CLI arguments.
-
-> [!TIP]
-> Note for **macOS users**. After downloading the binary you may need to run the command
-> `sudo xattr -rd com.apple.quarantine ~/bin/atac` (modify to reflect the path where `atac` is located).
-
-### Compile by yourself
-
-> [!IMPORTANT]
-> First, make sure your rust version is at least 1.82
-
-Simply clone the repository and use:
-
-```bash
-cargo run
-cargo run -- -h
+```sh
+lazyapi env new Development
+lazyapi env key Development add BASE_URL https://example.com
+lazyapi env key Development set BASE_URL https://staging.example.com
+lazyapi env rename Development Staging
+lazyapi env list
+lazyapi env delete Staging
 ```
 
-> [!TIP]
-> Build the latest release
-> ```bash
-> cargo build --release
-> ```
+## Collections and configuration
+
+On Linux, the default application directory is `$XDG_CONFIG_HOME/lazyapi`, or
+`~/.config/lazyapi` when `XDG_CONFIG_HOME` is unset. Other platforms use their
+standard per-user configuration directory for LazyAPI.
+
+The directory contains:
+
+- JSON or YAML collection files, including saved requests and headers.
+- `.env.<name>` files for environments.
+- `lazyapi.toml` for settings specific to that directory.
+- `lazyapi.log` for terminal UI logs.
+
+`global.toml` in the default configuration directory supplies fallback settings.
+Collection formats and saved request values are independent of the app name.
+`--dry-run` prevents collection and environment writes; the terminal UI still
+writes its log file.
+
+| Variable | Purpose |
+| --- | --- |
+| `LAZYAPI_MAIN_DIR` | Default collection directory; `--directory` takes precedence. |
+| `LAZYAPI_THEME` | Path to a theme TOML file. |
+| `LAZYAPI_KEY_BINDINGS` | Path to a key bindings TOML file. |
+
+Example configuration in `lazyapi.toml`:
+
+```toml
+save_requests_response = true
+wrap_responses = true
+preferred_collection_file_format = "json"
+```
+
+Themes and key bindings are available in [example_resources](example_resources).
+The [default theme](example_resources/themes/default_theme.toml) contains the
+Deep Space colors and can be copied to customize them. Older theme files still
+load; optional `[palette]` colors inherit the default values. For example, from
+the repository root:
+
+```sh
+LAZYAPI_THEME=example_resources/themes/default_theme.toml \
+LAZYAPI_KEY_BINDINGS=example_resources/key_bindings/vim_key_bindings.toml \
+lazyapi
+```
+
+New requests use `LazyAPI/v<version>` as their default User-Agent. Saved request
+headers keep their existing values.
 
 ## Features
 
-### Current
+- HTTP and WebSocket requests, collections, and environment variables.
+- Query parameters, headers, cookies, and multiple request body formats.
+- Basic, bearer, digest, and JWT authentication.
+- JavaScript scripts before and after requests.
+- Response images and request exports.
+- Import from Postman collections and environments, cURL, and OpenAPI.
+- Multiple request tabs with independent responses, panel selections, and scroll.
+- Vim Normal/Insert editing, directional pane focus, and a scrollable shortcut modal.
+- Themes and configurable key bindings, including Vim and Emacs presets.
+- Terminal UI and command-line workflows.
 
-| Features                                                                       | **ATAC**                                                                            | Postman              | Insomnia                 |
-|--------------------------------------------------------------------------------|-------------------------------------------------------------------------------------|----------------------|--------------------------|
-| **Manage collections & requests**                                              | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| **HTTP Client**                                                                | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Methods                                                                        | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - GET                                                                          | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - POST                                                                         | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - PUT                                                                          | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - PATCH                                                                        | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - DELETE                                                                       | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - OPTIONS                                                                      | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - HEAD                                                                         | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - TRACE                                                                        | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| - CONNECT                                                                      | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| Authentication                                                                 | Partial                                                                             | :white_check_mark:   | :white_check_mark:       |
-| - Basic auth                                                                   | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Bearer token                                                                 | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Digest                                                                       | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - JWT                                                                          | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - OAuth1-2, AWS                                                                | :x: :soon:                                                                          | :white_check_mark:   | :white_check_mark:       |
-| Headers                                                                        | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Body                                                                           | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Multipart form                                                               | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - URL Encoded form                                                             | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - File                                                                         | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Plain text                                                                   | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - JSON, XML, HTML, Javascript                                                  | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Full response                                                                  | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Status code                                                                  | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Cookies                                                                      | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Headers                                                                      | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Duration                                                                     | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Scripting                                                                      | :white_check_mark:                                                                  | Partial              | :x:                      |
-| - Pre-request script                                                           | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| - Post-request script                                                          | :white_check_mark:                                                                  | :white_check_mark:   | :x:                      |
-| Asynchronous requests                                                          | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Per-request settings                                                           | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Use proxy                                                                    | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Allow redirects                                                              | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Store cookies                                                                | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Export to other languages (HTTP, cURL, PHP Guzzle, NodeJS Axios, Rust Reqwest) | :white_check_mark:                                                                  | :white_check_mark:   | :x:                      |
-| **WebSocket Client**                                                           | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| Message                                                                        | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Text                                                                         | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Binary                                                                       | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| - Ping                                                                         | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| - Pong                                                                         | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| - Close                                                                        | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| **GraphQL**                                                                    | :x: :soon:                                                                          | :white_check_mark:   | :white_check_mark:       |
-| **gRPC**                                                                       | :x: :soon:                                                                          | :white_check_mark:   | :white_check_mark:       |
-| **MQTT**                                                                       | :x: :soon:                                                                          | :white_check_mark:   | :x:                      |
-| **Free**                                                                       | :white_check_mark:                                                                  | Depends              | Depends                  |
-| **Lightweight, fast and efficient**                                            | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| **Data storage**                                                               | Your own committable, readable, versioned and retro-compatible files (JSON or YAML) | Tied to your account | Tied to your account     |
-| **Offline**                                                                    | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| **Real-time collaboration**                                                    | :x: (not planned)                                                                   | :white_check_mark:   | :white_check_mark:       |
-| **Full command line usage**                                                    | :white_check_mark:                                                                  | Partial              | :x:                      |
-| **Environment files and variables**                                            | :white_check_mark: (committable, readable and versioned)                            | :white_check_mark:   | :white_check_mark:       |
-| **View options**                                                               | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| **Global configuration file**                                                  | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - HTTP/HTTPS Proxy                                                             | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Toggle syntax highlighting                                                   | :white_check_mark:                                                                  | :x:                  | :x:                      |
-| - Save responses                                                               | :white_check_mark:                                                                  | :question:           | :question:               |
-| **Import from other file formats**                                             | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| - Postman v2.1.0 and Postman environment import                                | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark: / :x: |
-| - OpenAPI import                                                               | :white_check_mark: (AI generated, prone to bugs)                                    | :white_check_mark:   | :white_check_mark:       |
-| - cURL import                                                                  | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| **Themes**                                                                     | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
-| **Remappable key bindings**                                                    | :white_check_mark:                                                                  | :white_check_mark:   | :white_check_mark:       |
+## Shell completions and manual
 
-### TODO v1.0.0
+The local installer writes:
 
-- **To add**
-  - Individual request documentation in the TUI (markdown)
-  - Insomnia import
+- Bash: `~/.local/share/bash-completion/completions/lazyapi`.
+- Zsh: `~/.local/share/zsh/site-functions/_lazyapi`.
+- Fish: `~/.config/fish/completions/lazyapi.fish`.
+- Manual: `~/.local/share/man/man1/lazyapi.1`.
 
-- **To improve**
-  - Editing cookies
-  - Manage multipart Content-type header (auto-generated for now) https://github.com/seanmonstar/reqwest/issues/2259
+These paths honor `XDG_DATA_HOME` and `XDG_CONFIG_HOME`. For Zsh, add the completion
+directory to `fpath` before calling `compinit` in your shell configuration.
 
-### TODO v2.0.0
+You can also generate them yourself in an existing directory:
 
-- **To add**
-  - Maybe GraphQL requests
-  - Maybe MQTT requests
-  - Maybe gRPC requests
+```sh
+lazyapi completions zsh ./completions
+lazyapi man ./man
+```
 
-- **To improve**
-  - Auto-completion on env file variables
+## Docker
 
-### Ideas (will think about it later)
+Build and run a local image with an existing collection directory mounted:
 
-- Base URL property and authorization on collections
-- VScode plugin to see and send requests
+```sh
+docker build --build-arg RUST_VERSION=1.90 -t lazyapi .
+docker run --rm -it -v "$PWD/collections:/data" lazyapi --directory /data
+```
 
-## Documentation
-
-Here is the documentation: https://atac.julien-cpsn.com/
-
-If you think something is missing, please contribute!
-
-## Others
-
-### Vim key-bindings
-
-You can read more about it here: https://github.com/Julien-cpsn/ATAC/releases/tag/v0.14.0
-
-### NeoVim integration
-
-Thanks to [@NachoNievaG](https://github.com/NachoNievaG) you can have an ATAC floating window inside your nvim
-https://github.com/NachoNievaG/atac.nvim
-
-### Themes
-
-You can read more about it here: https://github.com/Julien-cpsn/ATAC/releases/tag/v0.18.0
-
-## Technical precisions
-
-### Tested on
-
-- Console Host
-  - Windows 11 (Pro)
-  - WSL2 Debian 12
-  - Windows 10 (Pro)
-  - Windows 8.1 (N)
-- Ubuntu Desktop Terminal
-  - Ubuntu 23.04 64-bit
-  - Ubuntu 17.10
-  - Pop!_OS 20.04
-- (Arch, Manjaro) KDE Konsole
-- (Arch, NixOS) Kitty
-- Linux Mint
-- (OpenSuse) Alacritty
-- (Chrome OS) Crostini
-- Apple
-  - macOS Monterey 12.7.1 (Intel-Chip)
-  - macOS Sonama 14.4 (M1 Max, Apple Silicon-Chip)
-
-(List from [here](https://github.com/crossterm-rs/crossterm#tested-terminals))
-
-### Dependencies
-
-| **Category / Library**                                                           | **Version** | **Comment**                                                                                               |
-|----------------------------------------------------------------------------------|-------------|-----------------------------------------------------------------------------------------------------------|
-| **Request**                                                                      |             |                                                                                                           |
-| [reqwest](https://github.com/seanmonstar/reqwest)                                | 0.13.2      | Send requests                                                                                             |
-| [reqwest-middleware](https://github.com/TrueLayer/reqwest-middleware)            | 0.5.1       | Wrapper around reqwest to allow for client middleware chains                                              |
-| [reqwest-websocket](https://github.com/jgraef/reqwest-websocket)                 | 0.6.0       | Wrapper around reqwest to handle web-socket requests                                                      |
-| **TUI**                                                                          |             |                                                                                                           |
-| [ratatui](https://github.com/ratatui/ratatui)                                    | 0.30.0      | Terminal UI framework                                                                                     |
-| [crokey](https://github.com/Canop/crokey)                                        | 1.4.0       | Used to parse, use key bindings files and some utilities                                                  |
-| [tui-big-text](https://github.com/ratatui/tui-widgets)                           | 0.8.2       | Display big texts. Only used for displaying ATAC in the homepage.                                         |
-| [tui-tree-widget](https://github.com/EdJoPaTo/tui-rs-tree-widget)                | 0.24.0      | Display tree-like lists. Used for displaying the collections.                                             |
-| [tui-scrollview](https://github.com/joshka/tui-widgets)                          | 0.6.2       | Display scrollable panels                                                                                 |
-| [edtui](https://github.com/preiter93/edtui)                                      | 0.11.1      | Text area that handle a lot of features. Used for editing request URL, body, messages, payloads, scripts. |
-| [throbber-widgets-tui](https://github.com/arkbig/throbber-widgets-tui)           | 0.10.0      | Display loading UI elements. Used when request is pending.                                                |
-| [ratatui-image](https://github.com/benjajaja/ratatui-image)                      | 10.0.5      | Display response images.                                                                                  |
-| [image](https://github.com/image-rs/image)                                       | 0.25.9      | Decode images.                                                                                            |
-| **Main functionalities**                                                         |             |                                                                                                           |
-| [syntect](https://github.com/trishume/syntect)                                   | 5.3.0       | Syntax highlighting                                                                                       |
-| [serde](https://github.com/serde-rs/serde)                                       | 1.0.228     | Serialize & Deserialize application data into files                                                       |
-| [jsonxf](https://github.com/gamache/jsonxf)                                      | 1.1.1       | Pretty print JSON                                                                                         |
-| [toml](https://github.com/toml-rs/toml)                                          | 0.9.11      | Serialize & Deserialize application config files                                                          |
-| [boa_engine](https://github.com/boa-dev/boa)                                     | 0.21.0      | Create Javascript runtimes. Used for pre and post request scripts                                         |
-| [parse_postman_collection](https://github.com/julien-cpsn/postman-collection-rs) | 0.2.4       | Deserialize Postman collection files                                                                      |
-| [curl-parser](https://github.com/tyrchen/curl-parser)                            | 0.6.0       | Parse cURL request files                                                                                  |
-| [openapiv3](https://github.com/glademiller/openapiv3)                            | 2.2.0       | Parse OpenAPI spec files                                                                                  |
-| [clap](https://github.com/clap-rs/clap)                                          | 4.5.57      | Command Line Argument Parser                                                                              |
-| [directories](https://github.com/soc/directories-rs)                             | 6.0.0       | Use system files                                                                                          |
-| [arboard](https://github.com/1Password/arboard)                                  | 3.6.1       | Copy response body to clipboard                                                                           |
-| [jsonwebtoken](https://github.com/Keats/jsonwebtoken)                            | 10.3.0      | Create and encode JSON Web Tokens (JWT)                                                                   |
-| [digest_auth](https://git.ondrovo.com/packages/digest_auth_rs)                   | 0.3.1       | Digest auth                                                                                               |
-| **Async**                                                                        |             |                                                                                                           |
-| [tokio](https://github.com/tokio-rs/tokio)                                       | 1.49.0      | Handle asynchronous requests                                                                              |
-| [parking_lot](https://github.com/Amanieu/parking_lot)                            | 0.12.5      | Smaller, faster and more flexible implementation of RwLock and Mutex. Used everywhere.                    |
-| **Utils**                                                                        |             |                                                                                                           |
-| [strum](https://github.com/Peternator7/strum)                                    | 0.27.2      | Enum facilities                                                                                           |
-| [lazy_static](https://github.com/rust-lang-nursery/lazy-static.rs)               | 1.5.0       | Allows for more flexible constants. Mainly used for accessing CLI arguments everywhere                    |
-| [nestify](https://github.com/snowfoxsh/nestify)                                  | 0.3.3       | Used to nest struct definitions                                                                           |
-| [walkdir](https://github.com/BurntSushi/walkdir)                                 | 2.5.0       | Recursively retrieve files                                                                                |
-| [snailquote](https://github.com/euank/snailquote)                                | 0.3.1       | Unescape string                                                                                           |
-| [indexmap](https://github.com/indexmap-rs/indexmap)                              | 2.13.0      | Ordered hashmap. Used in environments to preserve files' values order                                     |
-| [rayon](https://github.com/rayon-rs/rayon)                                       | 1.11.0      | Allows the usage of multiple threads in for loops                                                         |
-| [thiserror](https://github.com/dtolnay/thiserror)                                | 2.0.18      | Create custom errors                                                                                      |
-| [anyhow](https://github.com/dtolnay/anyhow)                                      | 1.0.101     | Result that can contain any error                                                                         |
-| [clap-verbosity-flag](https://github.com/clap-rs/clap-verbosity-flag)            | 3.0.4       | Add verbosity flag to the CLI                                                                             |
-| [clap_complete](https://github.com/clap-rs/clap)                                 | 4.5.65      | Generate completion file                                                                                  |
-| [clap_mangen](https://github.com/clap-rs/clap)                                   | 0.2.31      | Generate man pages                                                                                        |
-| [regex](https://github.com/rust-lang/regex)                                      | 1.12.3      | Regex. Using for parsing requests URL                                                                     |
-| [chrono](https://github.com/chronotope/chrono)                                   | 0.4.43      | Time utils                                                                                                |
-| [uuid](https://github.com/uuid-rs/uuid)                                          | 1.20.0      | UUID generator                                                                                            |
-| [base64](https://github.com/marshallpierce/rust-base64)                          | 0.22.1      | Decode base64 strings                                                                                     |
-| [textwrap](https://github.com/mgeisler/textwrap)                                 | 0.16.2      | Wrap text to max length                                                                                   |
-| **Tracing**                                                                      |             |                                                                                                           |
-| [tracing](https://github.com/tokio-rs/tracing)                                   | 0.1.44      | Log events                                                                                                |
-| [tracing-subscriber](https://github.com/tokio-rs/tracing)                        | 0.3.22      | Utilities for implementing and composing tracing subscribers                                              |
-| [tracing-log](https://github.com/tokio-rs/tracing)                               | 0.2.0       | Log crate compatibility for tracing                                                                       |
-| [reqwest-tracing](https://github.com/TrueLayer/reqwest-middleware)               | 0.7.0       | Opentracing middleware implementation for reqwest-middleware                                              |
-
-### Binary size
-
-The binary file size goes from ~5 MB to ~15 MB depending on the platform. I try to keep it as small as possible, unfortunately for me, I bundle a Javascript runtime.
-
-## Contributors
-
-### Maintainers
-
-- [@julien-cpsn](https://github.com/julien-cpsn)
-
-### Packagers
-
-- Cargo, Brew, Docker - [@julien-cpsn](https://github.com/julien-cpsn)
-- Arch - [@orhun](https://github.com/orhun)
-- Fedora copr - [@joxcat](https://github.com/joxcat)
-
-## Star history
-
-<a href="https://www.star-history.com/#julien-cpsn/atac&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=julien-cpsn/atac&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=julien-cpsn/atac&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=julien-cpsn/atac&type=Date" />
- </picture>
-</a>
+The Docker workflow publishes this repository's image to GitHub Container Registry
+under `ghcr.io/giofahreza/lazyapi`. Release archives contain the `lazyapi` executable.
 
 ## License
 
-The MIT license for this project can be seen [here](./LICENSE)
+[MIT](LICENSE). The original copyright and permission notices are preserved.

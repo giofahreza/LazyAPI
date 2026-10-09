@@ -12,10 +12,10 @@ move_request_down = "Ctrl-Down"
 next_environment = "Ctrl-e"
 display_env_editor = "Shift-e"
 display_cookies = "Ctrl-c"
-display_logs = "Ctrl-l"
+display_logs = "Shift-L"
 
 [keybindings.generic]
-display_help = "Ctrl-h" # Take care to not overlap other inputs, the help can be triggered from anywhere
+display_help = "?"
 
 # E.g. Collection name, request name, URL, Header, Query param, Basic Auth, Bearer Token, Request body
 [keybindings.generic.text_input]
@@ -50,7 +50,7 @@ delete_element = "Ctrl-d"
 edit_element = "Enter" # Edit query param, header, basic auth, bearer token
 rename_element = "Ctrl-r" # Only used in the collections list (main menu)
 toggle_element = "Ctrl-t" # Only used in tables (Query params, headers, cookies)
-duplicate_element = "Shift-d"
+duplicate_element = "Shift-Y"
 
 [keybindings.request_selected]
 param_next_tab = "Tab"
@@ -80,3 +80,15 @@ scroll_right = "Ctrl-Right"
 yank_response_part = "Ctrl-y" # Used to yank the current result tab (e.g. body, headers, cookies)
 
 result_next_tab = "Shift-BackTab" # Will use param_next_tab depending on the selected view
+
+[keybindings.workspace]
+focus_left = "Ctrl-h"
+focus_down = "Ctrl-j"
+focus_up = "Ctrl-k"
+focus_right = "Ctrl-l"
+previous_request = "["
+next_request = "]"
+close_request = "Shift-X"
+previous_panel = "Shift-BackTab"
+page_up = "Ctrl-u"
+page_down = "Ctrl-d"

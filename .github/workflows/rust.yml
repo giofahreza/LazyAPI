@@ -17,4 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --locked --verbose
+    - name: Verify CLI and collection storage
+      run: LAZYAPI_BIN=target/debug/lazyapi python3 -m unittest discover -s tests -v

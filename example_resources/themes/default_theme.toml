@@ -1,43 +1,54 @@
-# Base colors:
-# Black, Red, Green, Yellow, Blue, Magenta, Cyan, Gray, DarkGray
-# LightRed, LightGreen, LightYellow, LightBlue, LightMagenta, LightCyan, White
-#
-# Hex codes also work, e.g.  "#1a2b3c"
+# LazyDB Deep Space — LazyAPI's built-in default.
+# Colors accept hex codes or terminal color names (White, Cyan, etc.).
+# Existing themes may omit [palette]; omitted colors inherit these defaults.
+
+[palette]
+background = "#070b12"
+surface = "#0c131e"
+surface_raised = "#111c2b"
+border = "#2b4256"
+grid_header = "#0f222c"
+grid_header_text = "#b8ebe5"
+grid_border = "#3a4854"
+text = "#d7e2ed"
+muted = "#697e92"
+accent = "#63e6d8"
+action = "#65a7ff"
+selection = "#1a3746"
+success = "#5cc896"
+warning = "#f4b860"
+error = "#ff6b7a"
 
 [ui]
-font_color = "White"
-# This can be null to preserve original terminal background
-# app_background = "Black"
-
-main_foreground_color = "White"
-secondary_foreground_color = "DarkGray"
-
-main_background_color = "DarkGray"
-secondary_background_color = "#323232"
+font_color = "#d7e2ed"
+# Omit app_background to preserve the terminal background.
+app_background = "#070b12"
+main_foreground_color = "#2b4256"
+secondary_foreground_color = "#697e92"
+main_background_color = "#0c131e"
+secondary_background_color = "#111c2b"
 
 [others]
-selection_highlight_color = "Yellow"
-environment_variable_highlight_color = "Cyan"
+selection_highlight_color = "#63e6d8"
+environment_variable_highlight_color = "#63e6d8"
 
-[HTTP]
-[HTTP.methods]
-GET = "Green"
-POST = "Yellow"
-PUT = "LightBlue"
-PATCH = "LightCyan"
-DELETE = "LightRed"
-OPTIONS = "Magenta"
-HEAD = "Green"
-TRACE = "Yellow"
-CONNECT = "LightBlue"
+[http.methods]
+get = "#5cc896"
+post = "#f4b860"
+put = "#65a7ff"
+patch = "#63e6d8"
+delete = "#ff6b7a"
+options = "#65a7ff"
+head = "#5cc896"
+trace = "#f4b860"
+connect = "#65a7ff"
 
-[websocket]
 [websocket.connection_status]
-connected = "Green"
-disconnected = "Red"
+connected = "#5cc896"
+disconnected = "#ff6b7a"
 
 [websocket.messages]
-server_foreground_color = "Blue"
-server_background_color = "DarkGray"
-you_background_color = "DarkGray"
-details_color = "DarkGray"
+server_foreground_color = "#d7e2ed"
+server_background_color = "#111c2b"
+you_background_color = "#1a3746"
+details_color = "#697e92"

@@ -1,60 +1,69 @@
-name: Build Docker Image
+name: Build LazyAPI Docker Image
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
       - .github/workflows/build-docker.yml
       - Dockerfile
+      - Cargo.toml
+      - Cargo.lock
+      - src/**
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   release:
-    types: [ "published" ]
+    types: ["published"]
+
+permissions:
+  contents: read
+  packages: write
 
 env:
-  PUSH_IMAGE: true
-  IMAGE_NAME: juliencaposiena/ATAC
   RUST_VERSION: "1.90"
 
 jobs:
   build-and-publish:
-    name: Build and Publish Docker Image
+    name: Build and Publish LazyAPI
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Docker meta
+      - name: Select this repository's container image
+        id: image
+        run: |
+          image_name="${GITHUB_REPOSITORY,,}"
+          echo "name=ghcr.io/$image_name" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
-            # When the main branch gets updated, don't tag it as 'main'; instead, tag it as 'latest'
-            type=ref,event=branch,enable=false
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{raw}}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        if: ${{ env.PUSH_IMAGE == 'true' && github.event_name != 'pull_request' }}
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-  
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           build-args: RUST_VERSION=${{ env.RUST_VERSION }}
-          push: ${{ env.PUSH_IMAGE == 'true' && github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Reuse docker build cache
           cache-from: type=gha
           cache-to: type=gha,mode=max

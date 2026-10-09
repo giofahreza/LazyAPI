@@ -18,7 +18,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.14.0"
+            "LazyAPI/v0.14.0"
           ]
         },
         {
@@ -79,7 +79,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.14.0"
+            "LazyAPI/v0.14.0"
           ]
         },
         {
@@ -140,7 +140,7 @@
           "enabled": true,
           "data": [
             "user-agent",
-            "ATAC/v0.14.0"
+            "LazyAPI/v0.14.0"
           ]
         },
         {

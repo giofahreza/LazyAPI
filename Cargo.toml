@@ -1,21 +1,20 @@
 [package]
-name = "atac"
-description = "Arguably a Terminal API Client. Feature-full, free, open-source, offline and account-less."
+name = "lazyapi"
+description = "A terminal API client for HTTP and WebSocket requests. Local collections, no account required."
 version = "0.23.1"
-authors = ["julien-cpsn"]
+authors = ["Giofahreza"]
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"
 readme = "README.md"
-documentation = "https://atac.julien-cpsn.com/"
-homepage = "https://github.com/Julien-cpsn/ATAC"
-repository = "https://github.com/Julien-cpsn/ATAC"
+documentation = "https://github.com/giofahreza/LazyAPI#readme"
+homepage = "https://github.com/giofahreza/LazyAPI"
+repository = "https://github.com/giofahreza/LazyAPI"
 keywords = ["API", "Client", "TUI", "Postman", "Insomnia"]
 
 exclude = [
     ".github",
-    "gifs",
-    "exemple_resources",
+    "example_resources",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -37,10 +36,10 @@ cookie_store = "=0.22.0"
 
 # TUI
 ## Terminal UI framework
-ratatui = { version = "=0.30.0", features = ["serde"] }
+ratatui = { version = "=0.30.0", features = ["serde", "unstable-rendered-line-info"] }
 ## Used to parse, use key bindings files and some utilities
 crokey = "=1.4.0"
-## Display big texts. Only used for displaying ATAC in the homepage.
+## Display big texts. Only used for displaying LazyAPI in the homepage.
 tui-big-text = "=0.8.2"
 ## Display tree-like lists. Used for displaying the collections.
 tui-tree-widget = { version = "=0.24.0" }
@@ -139,3 +138,6 @@ tracing-subscriber = { version = "=0.3.22", features = ["parking_lot", "chrono",
 tracing-log = "=0.2.0"
 ## Opentracing middleware implementation for reqwest-middleware
 reqwest-tracing = "=0.7.0"
+## Compute display cell width (tabs, CJK, emoji) so the real terminal cursor
+## lines up with the character under edtui's logical cursor.
+unicode-width = "0.2"

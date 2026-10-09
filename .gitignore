@@ -1,7 +1,8 @@
 .idea
 /target
 
-example_resources/collections/atac.log
-example_resources/collections/atac.toml
+example_resources/collections/lazyapi.log
+example_resources/collections/lazyapi.toml
 
 *.ps1
+__pycache__/

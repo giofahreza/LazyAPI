@@ -12,7 +12,7 @@ requests:
   - enabled: true
     data:
     - user-agent
-    - ATAC/v0.15.1
+    - LazyAPI/v0.15.1
   - enabled: true
     data:
     - accept
