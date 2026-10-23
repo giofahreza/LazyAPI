@@ -3,6 +3,12 @@ use crate::models::protocol::protocol::Protocol;
 use crate::models::protocol::ws::ws::WsRequest;
 use crate::tui::utils::stateful::text_input::TextInput;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NewRequestSource {
+    Blank,
+    Curl,
+}
+
 pub struct NewRequestPopup {
     pub selection: usize,
 
@@ -11,7 +17,9 @@ pub struct NewRequestPopup {
 
     pub protocol: Protocol,
 
-    pub text_input: TextInput
+    pub text_input: TextInput,
+    pub curl_text_area: TextInput,
+    pub source: NewRequestSource,
 }
 
 impl Default for NewRequestPopup {
@@ -22,11 +30,17 @@ impl Default for NewRequestPopup {
             max_collection_selection: 0,
             protocol: Protocol::default(),
             text_input: TextInput::new(Some(String::from("Request name"))),
+            curl_text_area: TextInput::new(Some(String::from("cURL command"))),
+            source: NewRequestSource::Blank,
         }
     }
 }
 
 impl NewRequestPopup {
+    pub fn is_curl(&self) -> bool {
+        self.source == NewRequestSource::Curl
+    }
+
     pub fn next_input(&mut self) {
         self.selection = match self.selection {
             0 => 1,
@@ -48,7 +62,9 @@ impl NewRequestPopup {
     pub fn input_left(&mut self) {
         match self.selection {
             0 => self.previous_collection(),
+            1 if self.is_curl() => self.text_input.move_cursor_left(),
             1 => self.previous_protocol(),
+            2 if self.is_curl() => self.curl_text_area.move_cursor_left(),
             2 => self.text_input.move_cursor_left(),
             _ => unreachable!()
         }
@@ -57,7 +73,9 @@ impl NewRequestPopup {
     pub fn input_right(&mut self) {
         match self.selection {
             0 => self.next_collection(),
+            1 if self.is_curl() => self.text_input.move_cursor_right(),
             1 => self.next_protocol(),
+            2 if self.is_curl() => self.curl_text_area.move_cursor_right(),
             2 => self.text_input.move_cursor_right(),
             _ => unreachable!()
         }

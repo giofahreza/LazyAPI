@@ -66,8 +66,10 @@ and `q` to quit from the workspace.
 The default controls follow Neovim and LazyDB: `h/j/k/l` navigate within a pane,
 `Ctrl+h/j/k/l` change pane, and `[` / `]` switch open request tabs. Open requests
 with Enter in Collections; close a tab with `X`. Press `a` in Collections to add
-a collection or request, or in a table to add a row. Press `d` to delete the
-selected item; collections and requests ask for confirmation. On a value, Enter opens the
+a collection, blank request, or cURL request, or in a table to add a row. A cURL
+request accepts a pasted multiline command and imports its method, URL, parameters,
+headers, authentication, and body. Press `d` to delete the selected item;
+collections and requests ask for confirmation. On a value, Enter opens the
 editor in Normal mode; inside it, `i/a/I/A` insert or append. Esc keeps your draft and returns
 to Normal. Use `:w` to save and keep editing, `:wq` or Ctrl+s to save and finish,
 and `:q!` or Ctrl+c to discard. The footer names the field and marks unsaved edits

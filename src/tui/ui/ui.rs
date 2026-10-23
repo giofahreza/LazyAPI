@@ -31,11 +31,12 @@ impl App<'_> {
         // through the public accessor on SearchState so the cursor shows up
         // there too.
         let search_input = self.search.input();
-        let inputs: [&TextInput; 24] = [
+        let inputs: [&TextInput; 25] = [
             &self.env_name_input,
             &self.new_collection_input,
             &self.rename_collection_input,
             &self.new_request_popup.text_input,
+            &self.new_request_popup.curl_text_area,
             &self.rename_request_input,
             &self.url_text_input,
             &self.auth_basic_username_text_input,

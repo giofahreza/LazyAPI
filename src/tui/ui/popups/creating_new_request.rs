@@ -7,7 +7,7 @@ use ratatui::Frame;
 use crate::app::app::App;
 use crate::app::files::theme::THEME;
 use crate::tui::utils::centered_rect::centered_rect;
-use crate::tui::utils::stateful::text_input::SingleLineTextInput;
+use crate::tui::utils::stateful::text_input::{MultiLineTextInput, SingleLineTextInput};
 
 impl App<'_> {
     pub fn render_creating_new_request_popup(&mut self, frame: &mut Frame) {
@@ -17,17 +17,13 @@ impl App<'_> {
             .bg(THEME.read().ui.main_background_color);
 
 
-        let area = centered_rect(50, 9, frame.area());
-
-        let new_request_layout = Layout::new(
-            Vertical,
-            vec![
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-            ]
-        )
-            .split(area);
+        let (area_width, area_height, constraints) = if self.new_request_popup.is_curl() {
+            (80, 18, vec![Constraint::Length(3), Constraint::Length(3), Constraint::Length(10)])
+        } else {
+            (50, 9, vec![Constraint::Length(3), Constraint::Length(3), Constraint::Length(3)])
+        };
+        let area = centered_rect(area_width, area_height, frame.area());
+        let new_request_layout = Layout::new(Vertical, constraints).split(area);
 
 
         let selected_collection_name = self.collections[self.new_request_popup.selected_collection].name.clone();
@@ -46,17 +42,35 @@ impl App<'_> {
                     .borders(Borders::ALL)
             );
 
-        let highlight_and_display_cursor = self.new_request_popup.selection == 2;
+        let name_is_active = if self.new_request_popup.is_curl() {
+            self.new_request_popup.selection == 1
+        } else {
+            self.new_request_popup.selection == 2
+        };
 
         frame.render_widget(Clear, area);
         frame.render_widget(popup_block, area);
         frame.render_widget(selected_collection_paragraph, new_request_layout[0]);
-        frame.render_widget(selected_protocol_paragraph, new_request_layout[1]);
 
-        self.new_request_popup.text_input.highlight_text = highlight_and_display_cursor;
-        self.new_request_popup.text_input.highlight_block = highlight_and_display_cursor;
-        self.new_request_popup.text_input.display_cursor = highlight_and_display_cursor;
+        if self.new_request_popup.is_curl() {
+            self.new_request_popup.text_input.highlight_text = name_is_active;
+            self.new_request_popup.text_input.highlight_block = name_is_active;
+            self.new_request_popup.text_input.display_cursor = name_is_active;
+            frame.render_widget(SingleLineTextInput(&mut self.new_request_popup.text_input), new_request_layout[1]);
 
-        frame.render_widget(SingleLineTextInput(&mut self.new_request_popup.text_input), new_request_layout[2]);
+            let curl_is_active = self.new_request_popup.selection == 2;
+            self.new_request_popup.curl_text_area.highlight_text = curl_is_active;
+            self.new_request_popup.curl_text_area.highlight_block = curl_is_active;
+            self.new_request_popup.curl_text_area.display_cursor = curl_is_active;
+            frame.render_widget(MultiLineTextInput(&mut self.new_request_popup.curl_text_area), new_request_layout[2]);
+        } else {
+            frame.render_widget(selected_protocol_paragraph, new_request_layout[1]);
+
+            self.new_request_popup.text_input.highlight_text = name_is_active;
+            self.new_request_popup.text_input.highlight_block = name_is_active;
+            self.new_request_popup.text_input.display_cursor = name_is_active;
+
+            frame.render_widget(SingleLineTextInput(&mut self.new_request_popup.text_input), new_request_layout[2]);
+        }
     }
 }

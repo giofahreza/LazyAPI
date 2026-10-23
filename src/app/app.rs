@@ -231,7 +231,7 @@ impl App<'_> {
             request_result_tab: RequestResultTabs::Body,
 
             creation_popup: ChoicePopup {
-              choices: vec![String::from("Collection"), String::from("Request")],
+              choices: vec![String::from("Collection"), String::from("Request"), String::from("cURL Request")],
               selection: 0
             },
             

@@ -1,4 +1,5 @@
 use crate::app::app::App;
+use crate::app::business_logic::request::curl::parse_curl_request;
 use crate::models::auth::auth::Auth;
 use crate::models::auth::basic::BasicAuth;
 use crate::models::auth::bearer_token::BearerToken;
@@ -9,6 +10,7 @@ use crate::models::protocol::protocol::Protocol;
 use crate::models::protocol::ws::message_type::MessageType;
 use crate::models::request::{Request, DEFAULT_HEADERS};
 use crate::models::settings::RequestSettings;
+use crate::tui::utils::stateful::new_request_popup::NewRequestSource;
 
 impl App<'_> {
     pub fn update_inputs(&mut self) {
@@ -174,7 +176,8 @@ impl App<'_> {
     pub fn new_element(&mut self) {
         match self.creation_popup.selection {
             0 => self.create_new_collection_state(),
-            1 => self.create_new_request_state(),
+            1 => self.create_new_request_state(NewRequestSource::Blank),
+            2 => self.create_new_request_state(NewRequestSource::Curl),
             _ => {}
         }
     }
@@ -194,14 +197,29 @@ impl App<'_> {
         let new_request_name = self.new_request_popup.text_input.to_string().trim().to_owned();
 
         let selected_collection_index = self.new_request_popup.selected_collection;
-        let protocol = self.new_request_popup.protocol.clone();
+        let new_request = match self.new_request_popup.source {
+            NewRequestSource::Blank => Request {
+                name: new_request_name,
+                protocol: self.new_request_popup.protocol.clone(),
+                headers: DEFAULT_HEADERS.clone(),
+                settings: RequestSettings::default(),
+                ..Default::default()
+            },
+            NewRequestSource::Curl => {
+                let curl = self.new_request_popup.curl_text_area.to_string();
+                if curl.trim().is_empty() {
+                    self.editor_notice = Some("Paste a cURL command before confirming".into());
+                    return;
+                }
 
-        let new_request = Request {
-            name: new_request_name,
-            protocol,
-            headers: DEFAULT_HEADERS.clone(),
-            settings: RequestSettings::default(),
-            ..Default::default()
+                match parse_curl_request(&curl, new_request_name) {
+                    Ok(request) => request,
+                    Err(error) => {
+                        self.editor_notice = Some(format!("Could not parse cURL: {error}"));
+                        return;
+                    }
+                }
+            }
         };
 
         match self.new_request(selected_collection_index, new_request) {

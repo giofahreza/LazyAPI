@@ -262,7 +262,7 @@ impl AppState {
 
                     KeyEventCreateNewRequest(EventKeyBinding::new(vec![], "Any input", None)),
                 ],
-                generate_text_input_documentation(key_bindings.generic.text_input.mode, true, false)
+                generate_text_input_documentation(key_bindings.generic.text_input.mode, false, false)
             ].concat(),
             DeletingCollection => vec![
                 GoBackToLastState(EventKeyBinding::new(vec![key_bindings.generic.navigation.go_back], "Cancel", Some("Cancel"))),

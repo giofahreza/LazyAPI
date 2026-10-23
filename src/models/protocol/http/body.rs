@@ -53,7 +53,17 @@ impl ContentType {
     }
 
     pub fn from_content_type(content_type: &str, body: String) -> ContentType {
-        match content_type {
+        // HTTP Content-Type values may include parameters, for example
+        // `application/json; charset=utf-8`. Only the media type determines
+        // which body editor should be used.
+        let media_type = content_type
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+
+        match media_type.as_str() {
             //"multipart/form-data" => Multipart(body),
             //"application/x-www-form-urlencoded" => Form(body),
             "application/octet-stream" => File(body),

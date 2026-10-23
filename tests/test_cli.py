@@ -99,6 +99,52 @@ class CommandLineTests(unittest.TestCase):
         self.assertIn(["user-agent", "saved-custom-client/1.0"], [header["data"] for header in saved])
         self.assertEqual(environment.read_bytes(), before[environment.name])
 
+    def test_curl_import_preserves_query_headers_and_body(self):
+        curl_file = self.root / "create.curl"
+        curl_file.write_text(
+            "curl --request POST 'https://example.test/items?page=2' "
+            "--header 'Content-Type: application/json; charset=utf-8' "
+            "--header 'X-Test: imported' "
+            "--cookie 'session_id=abc123' "
+            "--data-raw '{\"name\":\"Ada\"}'\n"
+        )
+        self.cli("import", "curl", curl_file, "Imported", "CreateItem")
+
+        request = json.loads((self.data / "Imported.json").read_text())["requests"][0]
+        self.assertEqual(request["name"], "CreateItem")
+        self.assertEqual(request["url"], "https://example.test/items")
+        self.assertEqual(request["params"][0]["data"], ["page", "2"])
+        self.assertEqual(request["protocol"]["method"], "POST")
+        self.assertEqual(request["protocol"]["body"], {"json": '{"name":"Ada"}'})
+        self.assertIn(["x-test", "imported"], [header["data"] for header in request["headers"]])
+        self.assertIn(["cookie", "session_id=abc123"], [header["data"] for header in request["headers"]])
+
+    def test_curl_import_supports_multiline_data_raw_and_cookie(self):
+        curl_file = self.root / "complicated.curl"
+        curl_file.write_text(
+            "curl 'https://api.example.com/v1/teams/acme/projects?include=members&include=permissions&page=2&filter%5Bstatus%5D=active' " + "\\\n"
+            "  --request PATCH " + "\\\n"
+            "  --header 'Content-Type: application/json; charset=utf-8' " + "\\\n"
+            "  --header 'Authorization: Bearer test-token-123' " + "\\\n"
+            "  --cookie 'session_id=abc123; theme=dark' " + "\\\n"
+            "  --data-raw '{\n"
+            "    \"settings\": {\n"
+            "      \"retention_days\": thirty\n"
+            "    }\n"
+            "  }'\n"
+        )
+        self.cli("import", "curl", curl_file, "Imported", "Complicated")
+
+        request = json.loads((self.data / "Imported.json").read_text())["requests"][0]
+        self.assertEqual(request["url"], "https://api.example.com/v1/teams/acme/projects")
+        self.assertEqual(request["protocol"]["method"], "PATCH")
+        self.assertEqual(
+            request["protocol"]["body"],
+            {"json": '{\n    "settings": {\n      "retention_days": thirty\n    }\n  }'},
+        )
+        self.assertEqual(request["auth"], {"bearer_token": {"token": "test-token-123"}})
+        self.assertIn(["cookie", "session_id=abc123; theme=dark"], [header["data"] for header in request["headers"]])
+
     def test_manual_and_all_shell_completions_are_generated(self):
         generated = self.root / "generated"
         generated.mkdir()

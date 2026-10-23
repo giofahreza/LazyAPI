@@ -6,6 +6,7 @@ use crate::models::protocol::protocol::Protocol;
 use crate::tui::app_states::AppState;
 use crate::tui::ui::param_tabs::param_tabs::RequestParamsTabs;
 use crate::tui::utils::stateful::cookie_table::cookie_to_row;
+use crate::tui::utils::stateful::new_request_popup::NewRequestSource;
 use edtui::actions::MoveToEndOfLine;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -132,7 +133,7 @@ impl App<'_> {
         self.set_app_state(AppState::CreatingNewCollection);
     }
 
-    pub fn create_new_request_state(&mut self) {
+    pub fn create_new_request_state(&mut self, source: NewRequestSource) {
         let collections_length = self.collections.len();
 
         // Cannot create a request if there is no collection
@@ -151,9 +152,16 @@ impl App<'_> {
         };
         
         self.new_request_popup.selected_collection = popup_selected_collection_index;
-        self.new_request_popup.selection = 2;
+        self.new_request_popup.source = source;
+        self.new_request_popup.selection = match source {
+            NewRequestSource::Blank => 2,
+            NewRequestSource::Curl => 1,
+        };
+        self.new_request_popup.protocol = Protocol::default();
         self.new_request_popup.text_input.clear();
         self.new_request_popup.text_input.reset_mode();
+        self.new_request_popup.curl_text_area.clear();
+        self.new_request_popup.curl_text_area.reset_mode();
         self.new_request_popup.max_collection_selection = collections_length;
         self.set_app_state(AppState::CreatingNewRequest);
     }

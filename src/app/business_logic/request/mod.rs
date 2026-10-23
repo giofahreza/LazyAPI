@@ -6,5 +6,6 @@ pub mod auth;
 pub mod headers;
 pub mod scripts;
 pub mod export;
+pub mod curl;
 pub mod http;
 pub mod ws;

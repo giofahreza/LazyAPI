@@ -7,6 +7,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.reset_mode();
         self.new_collection_input.reset_mode();
         self.new_request_popup.text_input.reset_mode();
+        self.new_request_popup.curl_text_area.reset_mode();
         self.rename_collection_input.reset_mode();
         self.rename_request_input.reset_mode();
         self.url_text_input.reset_mode();
@@ -35,6 +36,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.clear();
         self.new_collection_input.clear();
         self.new_request_popup.text_input.clear();
+        self.new_request_popup.curl_text_area.clear();
         self.rename_collection_input.clear();
         self.rename_request_input.clear();
         self.url_text_input.clear();
@@ -63,6 +65,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.reset_cursor_position();
         self.new_collection_input.reset_cursor_position();
         self.new_request_popup.text_input.reset_cursor_position();
+        self.new_request_popup.curl_text_area.reset_cursor_position();
         self.rename_collection_input.reset_cursor_position();
         self.rename_request_input.reset_cursor_position();
         self.url_text_input.reset_cursor_position();
@@ -89,6 +92,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.reset_selection();
         self.new_collection_input.reset_selection();
         self.new_request_popup.text_input.reset_selection();
+        self.new_request_popup.curl_text_area.reset_selection();
         self.rename_collection_input.reset_selection();
         self.rename_request_input.reset_selection();
         self.url_text_input.reset_selection();
@@ -122,6 +126,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.default_mode = default_mode;
         self.new_collection_input.default_mode = default_mode;
         self.new_request_popup.text_input.default_mode = default_mode;
+        self.new_request_popup.curl_text_area.default_mode = default_mode;
         // Rename inputs always start in Insert mode; Esc cancels the dialog.
         self.rename_collection_input.default_mode = EditorMode::Insert;
         self.rename_request_input.default_mode = EditorMode::Insert;
@@ -151,6 +156,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.is_single_line = true;
         self.new_collection_input.is_single_line = true;
         self.new_request_popup.text_input.is_single_line = true;
+        self.new_request_popup.curl_text_area.is_single_line = false;
         self.rename_collection_input.is_single_line = true;
         self.rename_request_input.is_single_line = true;
         self.url_text_input.is_single_line = true;
@@ -186,6 +192,7 @@ impl App<'_> {
         self.env_editor_table.selection_text_input.update_handler();
         self.new_collection_input.update_handler();
         self.new_request_popup.text_input.update_handler();
+        self.new_request_popup.curl_text_area.update_handler();
         self.rename_collection_input.update_handler();
         self.rename_request_input.update_handler();
         self.url_text_input.update_handler();

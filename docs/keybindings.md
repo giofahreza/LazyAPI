@@ -166,7 +166,7 @@ An invalid value keeps its editor and draft open.
 
 | Keys | Action |
 | --- | --- |
-| `a` | Create a collection, request, or row in the focused table. |
+| `a` | Create a collection, blank request, cURL request, or row in the focused table. |
 | `r` | Rename the selected collection or request. |
 | `d` | Delete the selected item; collections/requests require confirmation. |
 | `Y` | Duplicate the selected item. |

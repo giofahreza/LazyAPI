@@ -475,19 +475,31 @@ impl App<'_> {
                 KeyEventCreateNewCollection(_) => self.new_collection_input.key_event(key, None),
 
 
-                CreateNewRequest(_) => match self.new_request_popup.text_input.is_in_default_mode() {
-                    true => self.tui_new_request(),
-                    false => self.new_request_popup.text_input.key_event(key, None),
+                CreateNewRequest(_) => {
+                    let should_create = self.active_input().is_none_or(|input| input.is_in_default_mode());
+                    if should_create {
+                        self.tui_new_request();
+                    } else if let Some(input) = self.active_input_mut() {
+                        input.key_event(key, None);
+                    }
                 },
-                CancelCreateNewRequest(_) => match self.new_request_popup.text_input.is_in_default_mode() {
-                    true => self.normal_state(),
-                    false => self.new_request_popup.text_input.key_event(key, None),
+                CancelCreateNewRequest(_) => {
+                    let should_cancel = self.active_input().is_none_or(|input| input.is_in_default_mode());
+                    if should_cancel {
+                        self.normal_state();
+                    } else if let Some(input) = self.active_input_mut() {
+                        input.key_event(key, None);
+                    }
                 },
                 CreatingRequestSelectInputUp(_) => self.new_request_popup.previous_input(),
                 CreatingRequestSelectInputDown(_) => self.new_request_popup.next_input(),
                 CreatingRequestInputLeft(_) => self.new_request_popup.input_left(),
                 CreatingRequestInputRight(_) => self.new_request_popup.input_right(),
-                KeyEventCreateNewRequest(_) => self.new_request_popup.text_input.key_event(key, None),
+                KeyEventCreateNewRequest(_) => {
+                    if let Some(input) = self.active_input_mut() {
+                        input.key_event(key, None);
+                    }
+                },
 
 
                 DeletingCollectionMoveCursorLeft(_) => self.delete_collection_popup.change_state(),
