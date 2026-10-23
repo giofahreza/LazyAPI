@@ -302,6 +302,25 @@ class TerminalWorkflowTests(unittest.TestCase):
         self.assert_theme_text_and_cursor(app)
         self.assertTrue(self.saved()[0]["protocol"]["body"]["raw"].endswith("_SCROLL_LIVE"))
 
+    def test_insert_cursor_follows_viewport_when_moving_up_from_scrolled_bottom(self):
+        self.requests[0]["protocol"]["body"] = {"raw": "\n".join(f"row{i}" for i in range(70))}
+        self.write_fixtures()
+        app = self.start()
+        self.open_first(app)
+        app.press(b"\t\t\t")
+        app.press("G")
+        app.press("i")
+        bottom_y = app.terminal.y
+
+        # Move the editor cursor up one row in Normal mode, then re-enter
+        # Insert mode. edtui keeps its viewport anchored while the row is
+        # still visible; the terminal cursor must follow that row rather than
+        # being recomputed and pinned to the bottom of the viewport.
+        app.press(b"\x1b")
+        app.press("k")
+        app.press("i")
+        self.assertEqual(app.terminal.y, bottom_y - 1)
+
     def test_single_line_auth_form_script_and_jwt_editors_render_live_themed_text(self):
         auth_examples = json.loads((REPOSITORY / "example_resources/collections/auth.json").read_text())["requests"]
         digest = next(request["auth"] for request in auth_examples if isinstance(request["auth"], dict) and "digest" in request["auth"])
@@ -1070,6 +1089,52 @@ class TerminalWorkflowTests(unittest.TestCase):
         app.press(b"\t\t\t")
         app.press(b"\r")
         self.assertIn("hjkl[]?", [r["name"] for r in self.saved()])
+
+    def test_curl_request_dialog_imports_multiline_request(self):
+        app = self.start()
+        app.press("all\r")  # Create element -> cURL Request.
+        self.assertIn("cURL command", app.screen())
+        app.press("Imported from cURL")
+        app.press(b"\x1b")  # Switch the name editor to Normal mode first.
+        app.press(b"\t")
+        # The cURL editor is a real multiline editor: its terminal cursor
+        # must move into the editor and align after edtui's dynamic gutter.
+        self.assertEqual((app.terminal.x, app.terminal.y), (44, 19))
+        self.assert_theme_text_and_cursor(app, insert=True)
+        payload = b"curl --request GET 'http://example.test/items?page=2' --header 'X-Test: imported'"
+        app.press(b"\x1b[200~" + payload + b"\x1b[201~")
+        app.press(b"\x13")  # Ctrl+s confirms the multiline cURL input.
+
+        request = self.saved()[-1]
+        self.assertEqual(request["name"], "Imported from cURL")
+        self.assertEqual(request["url"], "http://example.test/items")
+        self.assertEqual(request["params"][0]["data"], ["page", "2"])
+        self.assertIn(["x-test", "imported"], [header["data"] for header in request["headers"]])
+
+    def test_curl_editor_cursor_tracks_insert_position(self):
+        app = self.start()
+        app.press("all\r")
+        app.screen()
+        app.press(b"\x1b")
+        app.press(b"\t")
+        self.assertEqual((app.terminal.x, app.terminal.y), (44, 19))
+        app.press("curl")
+        self.assertEqual((app.terminal.x, app.terminal.y), (48, 19))
+
+    def test_insert_tab_stays_text_and_normal_tab_switches_new_request_fields(self):
+        app = self.start()
+        app.press("all\r")
+        app.screen()
+        app.press("Name")
+        app.press(b"\t")
+        app.press("Suffix")
+        self.assertIn("INSERT · New request", app.terminal.text)
+        self.assertIn("1:12", app.terminal.text)
+
+        app.press(b"\x1b")
+        app.press(b"\t")
+        self.assertEqual((app.terminal.x, app.terminal.y), (44, 19))
+        app.press(b"\x03")
 
     def test_last_table_row_remains_editable_after_scroll_and_tab_switch(self):
         self.requests[0]["params"] = [{"enabled": True, "data": [f"row{i}", "unchanged"]} for i in range(60)]

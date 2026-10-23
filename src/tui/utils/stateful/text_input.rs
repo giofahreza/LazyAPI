@@ -11,7 +11,7 @@ use ratatui::crossterm::cursor::SetCursorStyle;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::prelude::{Modifier, Rect, Style, Widget};
+use ratatui::prelude::{Color, Modifier, Position, Rect, Style, Widget};
 use ratatui::widgets::Padding;
 use ratatui::Terminal;
 use std::collections::HashMap;
@@ -37,13 +37,6 @@ pub struct TextInput {
 
 pub struct SingleLineTextInput<'a>(pub &'a mut TextInput);
 pub struct MultiLineTextInput<'a>(pub &'a mut TextInput);
-
-/// The cell width of a single source character, accounting for tabs and
-/// Unicode wide glyphs (CJK, emoji). edtui uses tab_width 2 for single-line
-/// editors and 4 for multi-line editors.
-fn char_cell_width(ch: char, tab_width: usize) -> usize {
-    if ch == '\t' { tab_width } else { unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1) }
-}
 
 /// Map an editor mode to the terminal cursor shape we want the OS to draw.
 /// The terminal remembers the shape across frames, so the caller can emit
@@ -83,110 +76,106 @@ fn input_theme(input: &TextInput) -> EditorTheme<'static> {
         } else { Style::default() })
 }
 
-/// The screen cell that the editor will hand to the terminal as the cursor
-/// position. Returns `None` when no cursor should be shown (unfocused field,
-/// empty buffer area, or the cursor row is scrolled out of view).
-///
-/// `line_number_width` is `0` for single-line editors and `4` for multi-line
-/// editors (matching `LineNumbers::Absolute`). `tab_width` is `1` for
-/// single-line and `4` for multi-line, matching the edtui config used by each
-/// widget in this file.
-fn compute_cursor_screen_cell(
-    input: &TextInput,
-    area: Rect,
-    line_number_width: u16,
-    tab_width: usize,
-) -> Option<(u16, u16)> {
-    if !input.display_cursor { return None; }
-    if area.width == 0 || area.height == 0 { return None; }
 
-    // Mirror the block layout the widget uses at render time. Both
-    // `SingleLineTextInput` and `MultiLineTextInput` render a Block with
-    // `Borders::ALL` and `Padding::horizontal(1)`, so the content lives in
-    // `block.inner(area)`, which shrinks the area by 1 on every side for the
-    // border AND by 1 on the left/right for the padding. Without a block,
-    // the editor spans the whole `area`.
-    let inner = match &input.block_title {
-        Some(_) => {
-            let mut inner = area;
-            // Borders (1 on each side)
-            if inner.width >= 2 { inner.width -= 2; inner.x += 1; }
-            if inner.height >= 2 { inner.height -= 2; inner.y += 1; }
-            // Padding::horizontal(1) (1 on the left, 1 on the right)
-            if inner.width >= 2 { inner.width -= 2; inner.x += 1; }
-            inner
-        }
-        None => area,
-    };
-    if inner.width == 0 || inner.height == 0 { return None; }
-
-    // For multi-line editors edtui draws a 4-char-wide line-number gutter
-    // immediately inside the padding; the text starts to the right of it.
-    let text_x = inner.x.saturating_add(line_number_width);
-    if text_x >= inner.x.saturating_add(inner.width) { return None; }
-    let text_width = inner.width.saturating_sub(line_number_width);
-
-    let cursor = input.state.cursor;
-    let max_row = input.state.lines.len();
-    if cursor.row >= max_row { return None; }
-
-    // Replicate edtui's horizontal scroll: keep the cursor on screen by
-    // shifting the viewport left when the column walks past the right edge
-    // and right when it walks before the left edge.
-    let line_chars = input.state.lines.get(edtui::RowIndex::new(cursor.row))
-        .map(|l| l.clone()).unwrap_or_default();
-    let width_to_col = |col: usize| -> usize {
-        let cap = col.min(line_chars.len());
-        line_chars.iter().take(cap).map(|&c| char_cell_width(c, tab_width)).sum()
-    };
-
-    let mut viewport_start = 0usize;
-    while width_to_col(cursor.col).saturating_sub(width_to_col(viewport_start)) >= text_width as usize {
-        let next = viewport_start + 1;
-        if next > cursor.col { break; }
-        viewport_start = next;
-    }
-    let mut cursor_screen_col = width_to_col(cursor.col).saturating_sub(width_to_col(viewport_start));
-    // edtui's insert cursor is reported just after the character it is
-    // editing. Place the terminal caret on that character, matching the
-    // insertion point shown by desktop text fields.
-    if input.state.mode == EditorMode::Insert && cursor.col > 0 {
-        let previous_width = line_chars.get(cursor.col - 1)
-            .map(|&ch| char_cell_width(ch, tab_width)).unwrap_or(1);
-        cursor_screen_col = cursor_screen_col.saturating_sub(previous_width);
-    }
-    if cursor_screen_col >= text_width as usize { return None; }
-
-    // Vertical viewport for multi-line editors: simple "keep cursor on screen"
-    // window the same way edtui's `update_viewport_vertical` does.
-    let viewport_top = if input.is_single_line {
-        0
-    } else {
-        let height = inner.height as usize;
-        let mut top = 0usize;
-        // Pull the top down while the cursor would be above the window.
-        // (edtui updates the viewport every frame; we re-derive it here.)
-        if cursor.row >= height {
-            top = cursor.row + 1 - height;
-        }
-        top
-    };
-    let cursor_screen_row = cursor.row.saturating_sub(viewport_top);
-    if cursor_screen_row >= inner.height as usize { return None; }
-
-    let screen_x = text_x.saturating_add(cursor_screen_col as u16);
-    let screen_y = inner.y.saturating_add(cursor_screen_row as u16);
-    Some((screen_x, screen_y))
+/// Insert/Search mode uses the terminal cursor because edtui's painted cursor
+/// is intentionally hidden. Use a sentinel style for one render pass so the
+/// terminal position comes from edtui's own viewport and coordinate mapping,
+/// then render again with the real theme so the sentinel is never visible.
+fn terminal_cursor_needed(input: &TextInput) -> bool {
+    input.display_cursor && matches!(input.state.mode, EditorMode::Insert | EditorMode::Search)
 }
 
-impl TextInput {
-    /// Screen cell for the editor's cursor after the widget has rendered, or
-    /// `None` if the field is unfocused / scrolled away. `is_single_line` is
-    /// `true` for URL/auth/rename inputs and `false` for body / script /
-    /// message editors.
-    pub fn cursor_screen_cell(&self, area: Rect, is_single_line: bool) -> Option<(u16, u16)> {
-        let (gutter, tab_width) = if is_single_line { (0u16, 1usize) } else { (4u16, 4usize) };
-        compute_cursor_screen_cell(self, area, gutter, tab_width)
+fn cursor_marker_style() -> Style {
+    Style::default()
+        .fg(Color::Rgb(1, 2, 3))
+        .bg(Color::Rgb(4, 5, 6))
+}
+
+fn find_cursor_marker(buffer: &Buffer, area: Rect) -> Option<(u16, u16)> {
+    let marker_foreground = Color::Rgb(1, 2, 3);
+    let marker_background = Color::Rgb(4, 5, 6);
+
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            let position = Position::new(x, y);
+            if let Some(cell) = buffer.cell(position)
+                && cell.fg == marker_foreground
+                && cell.bg == marker_background
+            {
+                return Some((x, y));
+            }
+        }
+    }
+
+    None
+}
+
+fn render_single_line_editor(input: &mut TextInput, area: Rect, buffer: &mut Buffer) -> Option<(u16, u16)> {
+    if terminal_cursor_needed(input) {
+        let marker_theme = input_theme(input).hide_status_line().cursor_style(cursor_marker_style());
+        let actual_theme = input_theme(input).hide_status_line();
+        EditorView::new(&mut input.state)
+            .theme(marker_theme)
+            .wrap(false)
+            .render(area, buffer);
+        let cursor = find_cursor_marker(buffer, area);
+        EditorView::new(&mut input.state)
+            .theme(actual_theme)
+            .wrap(false)
+            .render(area, buffer);
+        cursor
+    } else {
+        let actual_theme = input_theme(input).hide_status_line();
+        EditorView::new(&mut input.state)
+            .theme(actual_theme)
+            .wrap(false)
+            .render(area, buffer);
+        None
+    }
+}
+
+fn multiline_editor_theme(input: &TextInput) -> EditorTheme<'static> {
+    let mut theme = input_theme(input).hide_status_line();
+    if input.display_cursor && input.state.mode == EditorMode::Search {
+        theme = theme.status_line(EditorStatusLine::default()
+            .style_line(THEME.read().base())
+            .style_mode(Style::new().fg(THEME.read().palette.accent))
+            .style_search(Style::new().fg(THEME.read().ui.font_color)));
+    }
+    if let Some(block_title) = &input.block_title {
+        theme = theme.block(THEME.read().panel(block_title.clone(), input.highlight_block)
+            .padding(Padding::horizontal(1)));
+    }
+    theme
+}
+
+fn render_multiline_editor(input: &mut TextInput, area: Rect, buffer: &mut Buffer) -> Option<(u16, u16)> {
+    if terminal_cursor_needed(input) {
+        let marker_theme = multiline_editor_theme(input).cursor_style(cursor_marker_style());
+        let actual_theme = multiline_editor_theme(input);
+        EditorView::new(&mut input.state)
+            .theme(marker_theme)
+            .wrap(false)
+            .line_numbers(LineNumbers::Absolute)
+            .tab_width(4)
+            .render(area, buffer);
+        let cursor = find_cursor_marker(buffer, area);
+        EditorView::new(&mut input.state)
+            .theme(actual_theme)
+            .wrap(false)
+            .line_numbers(LineNumbers::Absolute)
+            .tab_width(4)
+            .render(area, buffer);
+        cursor
+    } else {
+        let actual_theme = multiline_editor_theme(input);
+        EditorView::new(&mut input.state)
+            .theme(actual_theme)
+            .wrap(false)
+            .line_numbers(LineNumbers::Absolute)
+            .tab_width(4)
+            .render(area, buffer);
+        None
     }
 }
 
@@ -207,41 +196,17 @@ impl<'a> Widget for SingleLineTextInput<'a> {
         };
 
 
-        let theme = input_theme(self.0).hide_status_line();
-        EditorView::new(&mut self.0.state)
-            .theme(theme)
-            .wrap(false)
-            .render(new_area, buf);
         // The cursor position is read by the main render and pushed to the
         // terminal via `frame.set_cursor_position`; we cannot call that from
         // inside a `Widget::render` (the trait only gives us a `Buffer`), so
-        // we stash the computed cell on the input and the caller picks it up.
-        self.0.last_cursor_screen_cell = self.0.cursor_screen_cell(area, true);
+        // we stash the cell selected by edtui and the caller picks it up.
+        self.0.last_cursor_screen_cell = render_single_line_editor(self.0, new_area, buf);
     }
 }
 
 impl<'a> Widget for MultiLineTextInput<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
-        let mut theme = input_theme(self.0).hide_status_line();
-        if self.0.display_cursor && self.0.state.mode == EditorMode::Search {
-            theme = theme.status_line(EditorStatusLine::default()
-                .style_line(THEME.read().base())
-                .style_mode(Style::new().fg(THEME.read().palette.accent))
-                .style_search(Style::new().fg(THEME.read().ui.font_color)));
-        }
-        if let Some(block_title) = &self.0.block_title {
-            theme = theme.block(THEME.read().panel(block_title.clone(), self.0.highlight_block)
-                .padding(Padding::horizontal(1)));
-        }
-
-        let editor = EditorView::new(&mut self.0.state)
-            .theme(theme)
-            .wrap(false)
-            .line_numbers(LineNumbers::Absolute)
-            .tab_width(4);
-
-        editor.render(area, buf);
-        self.0.last_cursor_screen_cell = self.0.cursor_screen_cell(area, false);
+        self.0.last_cursor_screen_cell = render_multiline_editor(self.0, area, buf);
     }
 }
 

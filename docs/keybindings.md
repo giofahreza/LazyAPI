@@ -158,8 +158,9 @@ field. Multiline editors preserve line breaks; single-line fields replace line
 breaks with spaces.
 
 Creation and rename dialogs start in Insert mode. Esc returns to Normal and
-keeps the dialog open; Enter, Ctrl+s, or `:w` submits it. `Tab` / `Shift+Tab`
-move between fields of the new-request dialog. `Ctrl+c` or `:q!` cancels it.
+keeps the dialog open; Enter, Ctrl+s, or `:w` submits it. In the new-request
+dialog, `Tab` / `Shift+Tab` move between fields from Normal mode, while Tab in
+Insert mode is inserted into the active field. `Ctrl+c` or `:q!` cancels it.
 An invalid value keeps its editor and draft open.
 
 ## Collections, requests, and tables

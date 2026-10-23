@@ -261,14 +261,23 @@ impl App<'_> {
     }
 
     pub async fn handle_editor_key(&mut self, pressed: KeyCombination, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> bool {
-        // Tab changes fields in the creation dialog, including while typing a name.
-        if self.state == CreatingNewRequest && (pressed == key!(tab) || pressed == key!(shift-backtab)) {
+        let is_tab = pressed == key!(tab) || pressed == key!(shift-backtab);
+        let editor_is_normal = self.active_input().is_some_and(|input| input.state.mode == EditorMode::Normal);
+
+        // Tab changes fields in the creation dialog from Normal mode. In
+        // Insert mode it must reach edtui, which treats an unmodified Tab as
+        // a literal tab character.
+        if self.state == CreatingNewRequest && is_tab && editor_is_normal {
             if pressed == key!(tab) { self.new_request_popup.next_input(); }
             else { self.new_request_popup.previous_input(); }
-            if self.new_request_popup.selection == 2 { self.start_insert(); }
+            if self.active_input().is_some() { self.start_insert(); }
             return true;
         }
         let Some(input) = self.active_input() else { return false; };
+        // Request-panel navigation owns Tab only after the editor has returned
+        // to Normal mode. Returning false lets handle_workspace_key commit and
+        // switch panels; Insert mode continues through key_event below.
+        if is_tab && input.state.mode == EditorMode::Normal { return false; }
         let bindings = KEY_BINDINGS.read().generic.text_input;
         let single_line = input.is_single_line;
         let searching = input.state.mode == EditorMode::Search;
