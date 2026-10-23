@@ -153,8 +153,13 @@ impl AppState {
 
         match self {
             Normal => {
+                let exit_keys = if key_bindings.main_menu.exit == key!(ctrl-c) {
+                    vec![key!(ctrl-c)]
+                } else {
+                    vec![key_bindings.main_menu.exit, key!(ctrl-c)]
+                };
                 let mut base_events = vec![
-                    ExitApp(EventKeyBinding::new(vec![key_bindings.main_menu.exit, key!(ctrl-c)], "Exit", Some("Exit"))),
+                    ExitApp(EventKeyBinding::new(exit_keys, "Exit", Some("Exit"))),
 
                     Documentation(EventKeyBinding::new(vec![key_bindings.generic.display_help], "Display help", Some("Help"))),
 

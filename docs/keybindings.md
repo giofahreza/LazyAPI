@@ -84,7 +84,7 @@ paste can fill it. `/` in Insert mode remains literal text.
 | `gg` / `G` | First / last row in collections, parameter tables, environments, and responses. |
 | `Ctrl+u` / `Ctrl+d` | Move up / down ten rows. |
 | `Esc` in the request workspace | Focus Collections. |
-| `q` / `Ctrl+c` in the workspace | Quit the app. |
+| `Ctrl+c` in the workspace | Quit the app. |
 
 Opening the same request focuses its existing tab. Tabs preserve panel selection,
 row/column selection, view, and response scroll. Requests can complete in the

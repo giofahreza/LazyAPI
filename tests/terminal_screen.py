@@ -14,13 +14,15 @@ class TerminalScreen:
         self.width, self.height = width, height
         self.x = self.y = 0
         self.fg = self.bg = None
+        self.bold = False
+        self.italic = False
         self.pending = ""
         self.saved_cursor = (0, 0)
-        self.cells = [[(" ", None, None) for _ in range(width)] for _ in range(height)]
+        self.cells = [[(" ", None, None, False, False) for _ in range(width)] for _ in range(height)]
 
     def resize(self, width, height):
         self.cells = [
-            [self.cells[y][x] if y < self.height and x < self.width else (" ", None, None)
+            [self.cells[y][x] if y < self.height and x < self.width else (" ", None, None, False, False)
              for x in range(width)] for y in range(height)
         ]
         self.width, self.height = width, height
@@ -74,9 +76,9 @@ class TerminalScreen:
                 if unicodedata.combining(ch):
                     if self.x > 0:
                         old = self.cells[self.y][self.x - 1]
-                        self.cells[self.y][self.x - 1] = (old[0] + ch, old[1], old[2])
+                        self.cells[self.y][self.x - 1] = (old[0] + ch, old[1], old[2], old[3], old[4])
                 else:
-                    self.cells[self.y][self.x] = (ch, self.fg, self.bg)
+                    self.cells[self.y][self.x] = (ch, self.fg, self.bg, self.bold, self.italic)
                     self.x += 2 if unicodedata.east_asian_width(ch) in "WF" else 1
             i += 1
         self.pending = text[i:]
@@ -111,13 +113,17 @@ class TerminalScreen:
 
     def erase(self, start, end):
         for offset in range(start, end):
-            self.cells[offset // self.width][offset % self.width] = (" ", self.fg, self.bg)
+            self.cells[offset // self.width][offset % self.width] = (" ", self.fg, self.bg, self.bold, self.italic)
 
     def sgr(self, args):
         i = 0
         while i < len(args):
             code = args[i]
-            if code == 0: self.fg = self.bg = None
+            if code == 0: self.fg = self.bg = None; self.bold = self.italic = False
+            elif code == 1: self.bold = True
+            elif code == 22: self.bold = False
+            elif code == 3: self.italic = True
+            elif code == 23: self.italic = False
             elif code == 39: self.fg = None
             elif code == 49: self.bg = None
             elif 30 <= code <= 37: self.fg = code - 30

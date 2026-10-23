@@ -61,7 +61,7 @@ lazyapi request info Example/Get
 
 Use `lazyapi <command> --help` for command-specific options. Requests are sent only
 when you ask the app to send them. Press `?` in Normal mode for keyboard shortcuts,
-and `q` to quit from the workspace.
+and `Ctrl+C` to quit from the workspace.
 
 The default controls follow Neovim and LazyDB: `h/j/k/l` navigate within a pane,
 `Ctrl+h/j/k/l` change pane, and `[` / `]` switch open request tabs. Open requests

@@ -193,7 +193,7 @@ impl Default for KeyBindings {
         KeyBindings {
             workspace: Workspace::default(),
             main_menu: MainMenu {
-                exit: key!(q),
+                exit: key!(ctrl-c),
 
                 expand_collection: key!(l),
                 unselect_request: key!(h),

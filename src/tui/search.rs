@@ -147,7 +147,13 @@ impl SearchState {
             let text = if keys.is_empty() { description.clone() } else { format!("{keys:<key_width$} {description}") };
             let mut entry = SearchEntry::new(Location::Text(index), text.clone(), vec![text.clone()]);
             entry.scroll = scroll;
-            scroll += textwrap::wrap(&text, width.max(1) as usize).len();
+            scroll += if keys.is_empty() && description.is_empty() {
+                1
+            } else if keys.is_empty() {
+                textwrap::wrap(&description, width.max(1) as usize).len().max(1)
+            } else {
+                textwrap::wrap(&description, (width as usize).saturating_sub(key_width + 1).max(1)).len().max(1)
+            };
             entry
         }).collect();
         self.rendered.push((SearchScope::Help, entries));

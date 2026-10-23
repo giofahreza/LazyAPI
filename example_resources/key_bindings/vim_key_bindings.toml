@@ -12,7 +12,7 @@ page_up = "Ctrl-u"
 page_down = "Ctrl-d"
 
 [keybindings.main_menu]
-exit = "q"
+exit = "Ctrl-c"
 expand_collection = "l"
 unselect_request = "h"
 move_request_up = "Shift-K"

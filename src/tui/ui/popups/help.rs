@@ -10,6 +10,11 @@ use crate::app::files::key_bindings::KEY_BINDINGS;
 use crate::app::files::theme::THEME;
 use crate::tui::app_states::AVAILABLE_EVENTS;
 
+fn is_section_heading(text: &str) -> bool {
+    text.starts_with("CURRENT CONTEXT:")
+        || (!text.is_empty() && text.chars().any(char::is_alphabetic) && text == text.to_uppercase())
+}
+
 impl App<'_> {
     pub fn handle_help_key(&mut self, pressed: KeyCombination) -> bool {
         let bindings = *KEY_BINDINGS.read();
@@ -105,7 +110,11 @@ impl App<'_> {
             ("gg / G".into(), "First / last row in lists and responses".into()),
             (format!("{} / {}", w.page_up, w.page_down), "Move up / down 10 rows".into()),
             (b.generic.display_help.to_string(), "Show shortcuts in Normal mode".into()),
-            (b.main_menu.exit.to_string(), "Quit from the workspace".into()),
+            (if b.main_menu.exit == key!(ctrl-c) {
+                b.main_menu.exit.to_string()
+            } else {
+                format!("{} / Ctrl-c", b.main_menu.exit)
+            }, "Quit from the workspace".into()),
             (String::new(), "Pane/tab navigation saves the current field before leaving.".into()),
             (String::new(), "Tab/Shift+Tab switches panels from editor Normal mode; Insert Tab stays text.".into()),
             (String::new(), "COLLECTIONS AND TABLES".into()),
@@ -138,13 +147,22 @@ impl App<'_> {
         ]);
         // Legacy input events describe the old save/cancel dispatch. The modal
         // editor above owns those keys, so do not show contradictory actions.
-        for event in AVAILABLE_EVENTS.read().iter().filter(|_| !self.in_input()) {
+        for event in AVAILABLE_EVENTS.read().iter().filter(|event| {
+            !self.in_input() && !matches!(event, crate::tui::events::AppEvent::ExitApp(_))
+        }) {
             let binding = event.get_event_key_bindings();
             if !binding.keys.is_empty() && !matches!(event, crate::tui::events::AppEvent::Documentation(_)) {
                 rows.push((binding.keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(" / "), binding.event_name.clone()));
             }
         }
-        rows
+        let mut spaced_rows = Vec::with_capacity(rows.len() + 5);
+        for row in rows {
+            if row.0.is_empty() && is_section_heading(&row.1) && !spaced_rows.is_empty() {
+                spaced_rows.push((String::new(), String::new()));
+            }
+            spaced_rows.push(row);
+        }
+        spaced_rows
     }
 
     pub fn render_help_popup(&mut self, frame: &mut Frame) {
@@ -163,15 +181,32 @@ impl App<'_> {
         let rows = self.shortcut_rows();
         self.search.register_help(&rows, inner.width, key_width);
         for (keys, description) in rows {
-            if keys.is_empty() {
+            if keys.is_empty() && description.is_empty() {
+                lines.push(Line::default());
+            } else if keys.is_empty() {
+                let style = if is_section_heading(&description) {
+                    ratatui::style::Style::new().fg(ratatui::style::Color::White).bold()
+                } else {
+                    ratatui::style::Style::new().fg(ratatui::style::Color::White).italic()
+                };
                 for line in textwrap::wrap(&description, inner.width.max(1) as usize) {
-                    lines.push(Line::from(line.into_owned()).bold());
+                    lines.push(Line::from(Span::styled(line.into_owned(), style)));
                 }
             } else {
-                // Wrap long rows so shortcuts remain readable in small terminals.
-                let text = format!("{keys:<key_width$} {description}");
-                for line in textwrap::wrap(&text, inner.width.max(1) as usize) {
-                    lines.push(Line::from(Span::raw(line.into_owned()).fg(ratatui::style::Color::White)));
+                // Keep the key mapping visually distinct while wrapping only the
+                // description, so continuation lines stay aligned.
+                let description_width = (inner.width as usize).saturating_sub(key_width + 1).max(1);
+                let wrapped = textwrap::wrap(&description, description_width);
+                for (index, line) in wrapped.into_iter().enumerate() {
+                    let prefix = if index == 0 {
+                        format!("{keys:<key_width$} ")
+                    } else {
+                        " ".repeat(key_width + 1)
+                    };
+                    lines.push(Line::from(vec![
+                        Span::styled(prefix, ratatui::style::Style::new().fg(ratatui::style::Color::White).bold()),
+                        Span::raw(line.into_owned()).fg(ratatui::style::Color::White),
+                    ]));
                 }
             }
         }

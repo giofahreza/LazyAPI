@@ -1,7 +1,7 @@
 # Please avoid using Ctrl-v, it will paste your clipboard and trigger many unwanted event
 
 [keybindings.main_menu]
-exit = "q" # ctrl-c is implemented by default
+exit = "Ctrl-c" # ctrl-c is implemented by default
 
 unselect_request = "Left"
 expand_collection = "Right"

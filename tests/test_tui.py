@@ -507,6 +507,32 @@ class TerminalWorkflowTests(unittest.TestCase):
         app.press(b"\x03")
         self.assertEqual(self.saved()[0]["params"][0]["data"][0], "first")
 
+    def test_q_does_not_exit_and_help_formats_shortcuts_by_section(self):
+        app = self.start()
+        app.press("q")
+        app.assert_alive()
+        app.press("?")
+        lines = app.terminal.text.splitlines()
+        workspace = next(i for i, line in enumerate(lines) if "WORKSPACE" in line)
+        self.assertEqual(lines[workspace - 1].replace("│", "").strip(), "")
+        key_line = next(i for i, line in enumerate(lines) if "Enter on a value" in line)
+        key_start = lines[key_line].index("Enter on a value")
+        description_start = key_start + 32
+        self.assertTrue(app.terminal.cells[key_line][key_start][3])
+        self.assertFalse(app.terminal.cells[key_line][description_start][3])
+        section_line = next(i for i, line in enumerate(lines) if "MODES AND EDITING" in line)
+        section_start = lines[section_line].index("MODES AND EDITING")
+        self.assertTrue(app.terminal.cells[section_line][section_start][3])
+        self.assertFalse(app.terminal.cells[section_line][section_start][4])
+        note_line = next(i for i, line in enumerate(lines) if "[+] means unsaved edits" in line)
+        note_start = lines[note_line].index("[+] means unsaved edits")
+        self.assertFalse(app.terminal.cells[note_line][note_start][3])
+        self.assertTrue(app.terminal.cells[note_line][note_start][4])
+        self.assertIn("Ctrl+c", app.terminal.text)
+        self.assertNotIn("q / Ctrl+c", app.terminal.text)
+        app.press("G")
+        self.assertNotIn("Ctrl-c / Ctrl-c", app.terminal.text)
+
     def test_enter_inspects_and_insert_append_commands_position_the_cursor(self):
         app = self.start()
         self.open_first(app)
